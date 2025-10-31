@@ -1,11 +1,26 @@
+# Python
 .venv
 __pycache__
-.env
-.DS_Store
-.idea
+*.pyc
 .pytest_cache
 .ruff_cache
-.vscode
+
+# Environment
+.env
 .env.*
+!.env.example
+
+# IDEs
 .DS_Store
+.idea
 .vscode
+
+# Frontend
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/build
+frontend/.turbo
+
+# Docker
+docker-compose.override.yml
