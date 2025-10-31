@@ -1,16 +1,12 @@
-from agents.langgraph_agent import AIAgent
+from agents.langgraph_agent import get_graph
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 router = APIRouter()
 
 
-class AgentRequest(BaseModel):
-    input: str
-
-
 @router.post("/agent")
-async def run_agent(request: AgentRequest):
-    agent = AIAgent()
-    response = agent.process_input(request.input)
+async def run_agent():
+    graph = get_graph()
+    response = graph.invoke({"messages": [{"role": "user", "content": "hi!"}]})
     return {"response": response}
