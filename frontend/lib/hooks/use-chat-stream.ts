@@ -44,6 +44,8 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
           throw new Error("No response body")
         }
 
+        let buffer = ""
+
         while (true) {
           const { done, value } = await reader.read()
 
@@ -51,12 +53,23 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
             break
           }
 
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split("\n")
+          // Decode the chunk
+          buffer += decoder.decode(value, { stream: true })
+
+          // Split by newlines to process complete SSE messages
+          const lines = buffer.split("\n")
+
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || ""
 
           for (const line of lines) {
+            // Skip empty lines and comments
+            if (!line.trim() || line.startsWith(":")) {
+              continue
+            }
+
             if (line.startsWith("data: ")) {
-              const data = line.slice(6)
+              const data = line.slice(6).trim()
 
               try {
                 const parsed = JSON.parse(data)
@@ -72,18 +85,24 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
 
                 if (parsed.content) {
                   currentMessageRef.current += parsed.content
+                  // Call onChunk immediately for real-time display
                   options.onChunk?.(parsed.content)
                 }
               } catch (e) {
-                // Ignore JSON parse errors for incomplete chunks
-                if (e instanceof Error && !e.message.includes("Unexpected")) {
+                // Only throw if it's not a JSON parse error
+                if (e instanceof Error && e.message.includes("HTTP error")) {
                   throw e
                 }
+                // Silently ignore incomplete JSON chunks
               }
             }
           }
         }
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          // User cancelled, not an error
+          return
+        }
         const error = err instanceof Error ? err : new Error("Stream failed")
         setError(error)
         options.onError?.(error)

@@ -1,4 +1,5 @@
 import json
+import asyncio
 from typing import AsyncIterator
 from agents.langgraph_agent import get_graph, stream_graph
 from fastapi import APIRouter
@@ -18,16 +19,25 @@ class ChatResponse(BaseModel):
 
 async def event_stream(user_input: str) -> AsyncIterator[str]:
     """
-    Generate Server-Sent Events stream for chat responses
+    Generate Server-Sent Events stream for chat responses.
+    Streams tokens in real-time as they arrive from OpenAI.
     """
     try:
+        # Send initial connection confirmation
+        yield f": connected\n\n"
+
+        token_count = 0
         async for chunk in stream_graph(user_input):
-            # Format as SSE
-            data = json.dumps({"content": chunk})
+            # Format as SSE and yield immediately
+            data = json.dumps({"content": chunk, "token": token_count})
             yield f"data: {data}\n\n"
+            token_count += 1
+
+            # Small delay to ensure proper flushing (optional, but helps with buffering)
+            await asyncio.sleep(0)
 
         # Send completion event
-        yield f"data: {json.dumps({'done': True})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'total_tokens': token_count})}\n\n"
 
     except Exception as e:
         # Send error event

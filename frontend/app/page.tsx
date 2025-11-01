@@ -13,10 +13,17 @@ export default function Home() {
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or during streaming
   useEffect(() => {
     if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+      const scrollElement = scrollAreaRef.current;
+      const isNearBottom =
+        scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 100;
+
+      // Only auto-scroll if user is near the bottom (not scrolled up to read)
+      if (isNearBottom || streamingMessage) {
+        scrollElement.scrollTop = scrollElement.scrollHeight;
+      }
     }
   }, [messages, streamingMessage]);
 

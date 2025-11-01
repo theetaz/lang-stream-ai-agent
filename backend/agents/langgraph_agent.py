@@ -2,7 +2,7 @@ import os
 from typing import AsyncIterator
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 
 
 def get_llm():
@@ -37,11 +37,24 @@ def get_graph() -> StateGraph:
 
 
 async def stream_graph(user_input: str) -> AsyncIterator[str]:
-    """Stream the graph response"""
-    llm = get_llm()
+    """
+    Stream the graph response token by token.
+    Uses LangGraph's astream_events for real-time streaming.
+    """
     graph = get_graph()
 
-    # Stream the response
-    async for chunk in llm.astream(user_input):
-        if chunk.content:
-            yield chunk.content
+    # Create input with proper message format
+    input_data = {
+        "messages": [HumanMessage(content=user_input)]
+    }
+
+    # Stream events from the graph
+    async for event in graph.astream_events(input_data, version="v2"):
+        kind = event.get("event")
+
+        # We want to stream the tokens as they come from the LLM
+        if kind == "on_chat_model_stream":
+            content = event.get("data", {}).get("chunk", {})
+            if hasattr(content, "content") and content.content:
+                # Yield each token as it arrives
+                yield content.content
