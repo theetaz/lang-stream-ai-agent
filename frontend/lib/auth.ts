@@ -7,6 +7,9 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 
 export const auth = betterAuth({
+  baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_BETTER_AUTH_URL || "http://localhost:3000",
+  secret: process.env.BETTER_AUTH_SECRET || process.env.JWT_SECRET || "your-secret-key-change-in-production",
+  
   // Stateless session management - no database needed
   // All session data stored in encrypted cookies
   session: {

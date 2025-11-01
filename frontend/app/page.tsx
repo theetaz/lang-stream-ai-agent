@@ -55,59 +55,6 @@ export default function Home() {
     checkAuth();
   }, [router]);
 
-  // Show loading state while checking authentication
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Don't render if not authenticated
-  if (!session) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground">Redirecting to login...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const handleSignOut = async () => {
-    await signOut();
-    router.push("/login");
-  };
-
-  const getUserInitials = () => {
-    if (!session.user?.name) return "U";
-    return session.user.name
-      .split(" ")
-      .map((n: string) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  // Auto-scroll to bottom when new messages arrive or during streaming
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      const scrollElement = scrollAreaRef.current;
-      const isNearBottom =
-        scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 100;
-
-      // Only auto-scroll if user is near the bottom (not scrolled up to read)
-      if (isNearBottom || streamingMessage || streamingToolCalls.length > 0) {
-        scrollElement.scrollTop = scrollElement.scrollHeight;
-      }
-    }
-  }, [messages, streamingMessage, streamingToolCalls]);
-
   const handleToolEvent = (event: StreamEvent) => {
     if (event.type === "tool_start") {
       // Tool execution started - add a new tool call
@@ -183,6 +130,59 @@ export default function Home() {
       setStreamingToolCalls([]);
     },
   });
+
+  // Auto-scroll to bottom when new messages arrive or during streaming
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollElement = scrollAreaRef.current;
+      const isNearBottom =
+        scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 100;
+
+      // Only auto-scroll if user is near the bottom (not scrolled up to read)
+      if (isNearBottom || streamingMessage || streamingToolCalls.length > 0) {
+        scrollElement.scrollTop = scrollElement.scrollHeight;
+      }
+    }
+  }, [messages, streamingMessage, streamingToolCalls]);
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!session) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/login");
+  };
+
+  const getUserInitials = () => {
+    if (!session.user?.name) return "U";
+    return session.user.name
+      .split(" ")
+      .map((n: string) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   const handleSendMessage = async (content: string) => {
     // Add user message
