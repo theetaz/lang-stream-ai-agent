@@ -24,3 +24,5 @@ frontend/.turbo
 
 # Docker
 docker-compose.override.yml
+.cloudflared
+.claude
