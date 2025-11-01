@@ -7,10 +7,10 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://fastapi:8000/:path*",
-      },
+        destination: "http://localhost:8000/:path*"
+      }
     ];
-  },
+  }
 };
 
 export default nextConfig;

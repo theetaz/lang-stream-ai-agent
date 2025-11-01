@@ -5,7 +5,8 @@ import { ChatMessage, type Message } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Sparkles, LogOut, Loader2 } from "lucide-react";
+import { Bot, Sparkles, LogOut, Loader2, Settings } from "lucide-react";
+import Link from "next/link";
 import { useChatStream, type StreamEvent } from "@/lib/hooks/use-chat-stream";
 import { ToolCall, type ToolCallData } from "@/components/tool-call";
 import { signOut, getBackendAccessToken, getCurrentUser } from "@/lib/auth-client";
@@ -233,6 +234,13 @@ export default function Home() {
                   </p>
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/sessions" className="flex items-center">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Sessions</span>
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
                 <LogOut className="mr-2 h-4 w-4" />

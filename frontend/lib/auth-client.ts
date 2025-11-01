@@ -150,6 +150,111 @@ export async function getCurrentUser() {
 }
 
 /**
+ * Get current session ID
+ */
+export function getCurrentSessionId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("backend_session_id");
+}
+
+/**
+ * Get all sessions for current user
+ */
+export async function getUserSessions() {
+  try {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${API_URL}/api/v1/auth/sessions`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch sessions: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.sessions;
+  } catch (error) {
+    console.error("Get sessions error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a specific session
+ */
+export async function deleteSession(sessionId: string) {
+  try {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${API_URL}/api/v1/auth/sessions/${sessionId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: "Failed to delete session" }));
+      throw new Error(errorData.detail || `Failed to delete session: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Delete session error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Delete all sessions (logout from all devices)
+ */
+export async function deleteAllSessions() {
+  try {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${API_URL}/api/v1/auth/sessions/all`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: "Failed to delete sessions" }));
+      throw new Error(errorData.detail || `Failed to delete sessions: ${response.status}`);
+    }
+
+    // Clear local tokens if current session was deleted
+    const currentSessionId = getCurrentSessionId();
+    const data = await response.json();
+    
+    // If we deleted all sessions, clear local storage
+    localStorage.removeItem("backend_access_token");
+    localStorage.removeItem("backend_refresh_token");
+    localStorage.removeItem("backend_user");
+    localStorage.removeItem("backend_session_id");
+
+    return data;
+  } catch (error) {
+    console.error("Delete all sessions error:", error);
+    throw error;
+  }
+}
+
+/**
  * After OAuth success, send user data to backend and get JWT
  */
 export async function exchangeForBackendJWT(betterAuthSession: any) {
@@ -186,6 +291,9 @@ export async function exchangeForBackendJWT(betterAuthSession: any) {
     localStorage.setItem("backend_access_token", data.access_token);
     localStorage.setItem("backend_refresh_token", data.refresh_token);
     localStorage.setItem("backend_user", JSON.stringify(data.user));
+    if (data.session_id) {
+      localStorage.setItem("backend_session_id", data.session_id);
+    }
 
     return data;
   } catch (error) {
@@ -272,6 +380,7 @@ export async function signOut() {
     localStorage.removeItem("backend_access_token");
     localStorage.removeItem("backend_refresh_token");
     localStorage.removeItem("backend_user");
+    localStorage.removeItem("backend_session_id");
 
     // Sign out from Better Auth
     await authClient.signOut();
