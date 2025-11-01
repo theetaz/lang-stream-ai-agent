@@ -3,6 +3,7 @@
  * Handles Google OAuth flow only - stateless mode (no database required)
  * All user data is stored in backend database via API calls
  */
+import "./suppress-better-auth-warning";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 
@@ -12,6 +13,9 @@ export const auth = betterAuth({
   
   // Stateless session management - no database needed
   // All session data stored in encrypted cookies
+  // NOTE: Better Auth will show a warning about "No database configuration provided"
+  // This is expected and harmless - we're using cookieCache which stores everything in cookies
+  // The memory adapter is only used temporarily during OAuth flow
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day

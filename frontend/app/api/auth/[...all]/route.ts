@@ -2,6 +2,7 @@
  * Better Auth API Route Handler
  * Mounts Better Auth handler to Next.js API routes
  */
+import "@/lib/suppress-better-auth-warning";
 import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
 
