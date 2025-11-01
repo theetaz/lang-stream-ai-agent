@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Sparkles, LogOut, Loader2 } from "lucide-react";
 import { useChatStream, type StreamEvent } from "@/lib/hooks/use-chat-stream";
 import { ToolCall, type ToolCallData } from "@/components/tool-call";
-import { authClient, signOut, getBackendAccessToken } from "@/lib/auth-client";
+import { signOut, getBackendAccessToken, getCurrentUser } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,28 +33,22 @@ export default function Home() {
   // Check authentication on mount
   useEffect(() => {
     const checkAuth = async () => {
-      console.log("Checking authentication...");
-
       // Check backend token first
       const backendToken = getBackendAccessToken();
       if (!backendToken) {
-        console.log("No backend token, redirecting to login...");
         router.push("/login");
         return;
       }
 
-      // Get Better Auth session
-      const betterAuthSession = await authClient.getSession();
-      if (betterAuthSession.data) {
-        console.log("Authenticated:", betterAuthSession.data.user.email);
-        setSession(betterAuthSession.data);
+      // Get user info from backend API
+      const user = await getCurrentUser();
+      if (user) {
+        setSession({ user });
+        setLoading(false);
       } else {
-        console.log("No Better Auth session, redirecting to login...");
+        // Token invalid or expired, redirect to login
         router.push("/login");
-        return;
       }
-
-      setLoading(false);
     };
 
     checkAuth();
@@ -93,7 +87,7 @@ export default function Home() {
     if (!session.user?.name) return "U";
     return session.user.name
       .split(" ")
-      .map((n) => n[0])
+      .map((n: string) => n[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);

@@ -185,15 +185,9 @@ async def register(
     user = await create_user(
         db=db,
         email=data.email,
+        password_hash=hashed_password,
         name=data.name,
-        # Store hashed password in a new field (need to add to User model)
     )
-
-    # For now, we'll store password in google_id field (temporary hack)
-    # TODO: Add password field to User model
-    user.google_id = hashed_password
-    await db.commit()
-    await db.refresh(user)
 
     return create_token_response(user)
 
@@ -218,9 +212,8 @@ async def login(
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    # Verify password (stored in google_id field temporarily)
-    # TODO: Add proper password field to User model
-    if not user.google_id or not verify_password(data.password, user.google_id):
+    # Verify password
+    if not user.password_hash or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user.is_active:

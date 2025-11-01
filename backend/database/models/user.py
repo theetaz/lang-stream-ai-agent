@@ -25,6 +25,7 @@ class User(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=True)  # For email/password auth
     google_id = Column(String(255), unique=True, nullable=True, index=True)
     name = Column(String(255), nullable=True)
     avatar_url = Column(String(512), nullable=True)

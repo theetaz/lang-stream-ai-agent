@@ -1,8 +1,9 @@
 "use client";
 
-import { signInWithGoogle, authClient } from "@/lib/auth-client";
+import { signInWithGoogle, loginWithEmailPassword, registerWithEmailPassword, getBackendAccessToken } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,29 +11,23 @@ import { useEffect, useState } from "react";
 export default function LoginPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Check if user is already logged in
   useEffect(() => {
     const checkSession = async () => {
-      console.log("Login page: Checking existing session...");
-
       // Check if we have backend tokens
-      const backendToken = localStorage.getItem("backend_access_token");
+      const backendToken = getBackendAccessToken();
       if (backendToken) {
-        console.log("Login page: Found backend token, redirecting to home...");
         router.push("/");
         return;
       }
 
-      // Check Better Auth session
-      const session = await authClient.getSession();
-      if (session.data) {
-        console.log("Login page: Found Better Auth session, redirecting to home...");
-        router.push("/");
-        return;
-      }
-
-      console.log("Login page: No existing session");
       setChecking(false);
     };
 
@@ -40,8 +35,32 @@ export default function LoginPage() {
   }, [router]);
 
   const handleGoogleSignIn = async () => {
-    console.log("Login page: Starting Google OAuth flow with Better Auth...");
-    await signInWithGoogle();
+    setLoading(true);
+    setError(null);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
+      setLoading(false);
+    }
+  };
+
+  const handleEmailPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isLogin) {
+        await loginWithEmailPassword(email, password);
+      } else {
+        await registerWithEmailPassword(email, password, name || undefined);
+      }
+      router.push("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
+      setLoading(false);
+    }
   };
 
   // Show loading while checking for existing session
@@ -66,16 +85,91 @@ export default function LoginPage() {
           <div>
             <CardTitle className="text-2xl font-bold">Welcome to LangGraph AI</CardTitle>
             <CardDescription className="mt-2">
-              Sign in with your Google account to start chatting
+              {isLogin ? "Sign in to your account" : "Create a new account"}
             </CardDescription>
           </div>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleEmailPasswordSubmit} className="space-y-4">
+            {!isLogin && (
+              <div className="space-y-2">
+                <label htmlFor="name" className="text-sm font-medium">
+                  Name (optional)
+                </label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium">
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium">
+                Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+                minLength={6}
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full h-12 text-base font-medium"
+              size="lg"
+              disabled={loading}
+            >
+              {loading ? "Processing..." : isLogin ? "Sign In" : "Sign Up"}
+            </Button>
+          </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+            </div>
+          </div>
+
           <Button
             onClick={handleGoogleSignIn}
             className="w-full h-12 text-base font-medium"
             size="lg"
+            variant="outline"
+            disabled={loading}
           >
             <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -98,7 +192,21 @@ export default function LoginPage() {
             Continue with Google
           </Button>
 
-          <p className="mt-6 text-center text-xs text-muted-foreground">
+          <div className="text-center text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError(null);
+              }}
+              className="text-primary hover:underline"
+              disabled={loading}
+            >
+              {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            </button>
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground">
             By signing in, you agree to our Terms of Service and Privacy Policy
           </p>
         </CardContent>

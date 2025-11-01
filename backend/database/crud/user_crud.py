@@ -11,6 +11,7 @@ from database.models.user import User
 async def create_user(
     db: AsyncSession,
     email: str,
+    password_hash: Optional[str] = None,
     google_id: Optional[str] = None,
     name: Optional[str] = None,
     avatar_url: Optional[str] = None,
@@ -33,6 +34,7 @@ async def create_user(
     """
     user = User(
         email=email,
+        password_hash=password_hash,
         google_id=google_id,
         name=name,
         avatar_url=avatar_url,

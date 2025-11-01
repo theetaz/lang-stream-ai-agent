@@ -46,6 +46,110 @@ export async function signInWithGoogle() {
 }
 
 /**
+ * Register with email and password
+ * Sends registration request to backend API
+ */
+export async function registerWithEmailPassword(
+  email: string,
+  password: string,
+  name?: string
+) {
+  try {
+    console.log("Registering with email/password...");
+
+    const response = await fetch(`${API_URL}/api/v1/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password, name }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: "Registration failed" }));
+      throw new Error(errorData.detail || `Registration failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("Registration successful, storing tokens...");
+
+    // Store tokens in localStorage
+    localStorage.setItem("backend_access_token", data.access_token);
+    localStorage.setItem("backend_refresh_token", data.refresh_token);
+    localStorage.setItem("backend_user", JSON.stringify(data.user));
+
+    return data;
+  } catch (error) {
+    console.error("Registration error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Login with email and password
+ * Sends login request to backend API
+ */
+export async function loginWithEmailPassword(email: string, password: string) {
+  try {
+    console.log("Logging in with email/password...");
+
+    const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: "Login failed" }));
+      throw new Error(errorData.detail || `Login failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("Login successful, storing tokens...");
+
+    // Store tokens in localStorage
+    localStorage.setItem("backend_access_token", data.access_token);
+    localStorage.setItem("backend_refresh_token", data.refresh_token);
+    localStorage.setItem("backend_user", JSON.stringify(data.user));
+
+    return data;
+  } catch (error) {
+    console.error("Login error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get current user from backend API
+ */
+export async function getCurrentUser() {
+  try {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
+      return null;
+    }
+
+    const response = await fetch(`${API_URL}/api/v1/auth/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Get current user error:", error);
+    return null;
+  }
+}
+
+/**
  * After OAuth success, send user data to backend and get JWT
  */
 export async function exchangeForBackendJWT(betterAuthSession: any) {

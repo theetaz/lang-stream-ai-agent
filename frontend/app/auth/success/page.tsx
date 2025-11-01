@@ -76,7 +76,7 @@ export default function AuthSuccessPage() {
     };
 
     handleAuthSuccess();
-  }, []);
+  }, [processing, router]);
 
   if (error) {
     return (

@@ -18,6 +18,9 @@ COPY frontend/ .
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Clean any cached build files to avoid stale type definitions
+RUN rm -rf .next node_modules/.cache
+
 # Build the application
 RUN npm run build
 
