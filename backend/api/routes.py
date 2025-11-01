@@ -1,5 +1,8 @@
-from agents.langgraph_agent import get_graph
+import json
+from typing import AsyncIterator
+from agents.langgraph_agent import get_graph, stream_graph
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -13,10 +16,45 @@ class ChatResponse(BaseModel):
     response: str
 
 
+async def event_stream(user_input: str) -> AsyncIterator[str]:
+    """
+    Generate Server-Sent Events stream for chat responses
+    """
+    try:
+        async for chunk in stream_graph(user_input):
+            # Format as SSE
+            data = json.dumps({"content": chunk})
+            yield f"data: {data}\n\n"
+
+        # Send completion event
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    except Exception as e:
+        # Send error event
+        error_data = json.dumps({"error": str(e)})
+        yield f"data: {error_data}\n\n"
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Streaming chat endpoint using Server-Sent Events (SSE)
+    """
+    return StreamingResponse(
+        event_stream(request.input),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable buffering for nginx
+        },
+    )
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    Chat endpoint that accepts user input and returns AI response
+    Non-streaming chat endpoint (fallback)
     """
     graph = get_graph()
     result = graph.invoke({"messages": [{"role": "user", "content": request.input}]})

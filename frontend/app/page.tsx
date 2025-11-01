@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
 import { ChatMessage, type Message } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Sparkles } from "lucide-react";
+import { useChatStream } from "@/lib/hooks/use-chat-stream";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState<string>("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -18,7 +18,36 @@ export default function Home() {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, streamingMessage]);
+
+  const { streamMessage, isStreaming, error } = useChatStream({
+    onChunk: (chunk) => {
+      setStreamingMessage((prev) => prev + chunk);
+    },
+    onComplete: (fullMessage) => {
+      // Add the complete assistant message
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: fullMessage,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+      setStreamingMessage("");
+    },
+    onError: (error) => {
+      console.error("Stream error:", error);
+      // Add error message
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `Sorry, I encountered an error: ${error.message}. Please make sure the backend is running with a valid OpenAI API key.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setStreamingMessage("");
+    },
+  });
 
   const handleSendMessage = async (content: string) => {
     // Add user message
@@ -30,36 +59,9 @@ export default function Home() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
 
-    try {
-      // Call API
-      const response = await api.chat(content);
-
-      // Add assistant message
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: response.response,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error("Error sending message:", error);
-
-      // Add error message
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Sorry, I encountered an error. Please make sure the backend is running and try again.",
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
+    // Start streaming
+    await streamMessage(content);
   };
 
   return (
@@ -103,7 +105,8 @@ export default function Home() {
               {messages.map((message) => (
                 <ChatMessage key={message.id} message={message} />
               ))}
-              {isLoading && (
+              {/* Show streaming message */}
+              {(isStreaming || streamingMessage) && (
                 <div className="flex gap-3 px-4 py-6 bg-muted/50">
                   <div className="flex-shrink-0">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-white">
@@ -112,11 +115,20 @@ export default function Home() {
                   </div>
                   <div className="flex-1 space-y-2">
                     <p className="text-sm font-semibold">AI Assistant</p>
-                    <div className="flex gap-1">
-                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]"></div>
-                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]"></div>
-                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground"></div>
-                    </div>
+                    {streamingMessage ? (
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                          {streamingMessage}
+                          <span className="inline-block w-1 h-4 ml-1 bg-current animate-pulse" />
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1">
+                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]"></div>
+                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]"></div>
+                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground"></div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -129,7 +141,7 @@ export default function Home() {
           <div className="mx-auto max-w-3xl p-4">
             <ChatInput
               onSend={handleSendMessage}
-              disabled={isLoading}
+              disabled={isStreaming}
               placeholder="Ask anything..."
             />
             <p className="mt-2 text-center text-xs text-muted-foreground">
