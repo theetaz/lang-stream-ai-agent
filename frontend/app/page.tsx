@@ -5,15 +5,68 @@ import { ChatMessage, type Message } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Sparkles } from "lucide-react";
+import { Bot, Sparkles, LogOut, Loader2 } from "lucide-react";
 import { useChatStream, type StreamEvent } from "@/lib/hooks/use-chat-stream";
 import { ToolCall, type ToolCallData } from "@/components/tool-call";
+import { useSession, signOut } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function Home() {
+  const router = useRouter();
+  const { data: session, isPending } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingToolCalls, setStreamingToolCalls] = useState<ToolCallData[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isPending && !session) {
+      router.push("/login");
+    }
+  }, [isPending, session, router]);
+
+  // Show loading state while checking authentication
+  if (isPending) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render anything if not authenticated (will redirect)
+  if (!session) {
+    return null;
+  }
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/login");
+  };
+
+  const getUserInitials = () => {
+    if (!session.user?.name) return "U";
+    return session.user.name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   // Auto-scroll to bottom when new messages arrive or during streaming
   useEffect(() => {
@@ -130,7 +183,39 @@ export default function Home() {
           </div>
           <h1 className="text-lg font-semibold">LangGraph AI</h1>
         </div>
-        <ThemeToggle />
+
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+
+          {/* User Profile Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={session.user?.image || undefined} alt={session.user?.name || "User"} />
+                  <AvatarFallback className="bg-gradient-to-br from-blue-600 to-purple-600 text-white">
+                    {getUserInitials()}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{session.user?.name || "User"}</p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {session.user?.email || ""}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </header>
 
       {/* Main Content */}
