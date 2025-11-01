@@ -27,6 +27,8 @@ async def event_stream(user_input: str) -> AsyncIterator[str]:
         yield f": connected\n\n"
 
         token_count = 0
+        has_content = False
+
         async for event in stream_graph(user_input):
             event_type = event.get("type")
             event_data = event.get("data", {})
@@ -34,6 +36,7 @@ async def event_stream(user_input: str) -> AsyncIterator[str]:
             # Handle different event types
             if event_type == "token":
                 # Regular token from LLM
+                has_content = True
                 data = json.dumps({
                     "type": "content",
                     "content": event_data.get("content", ""),
@@ -75,15 +78,33 @@ async def event_stream(user_input: str) -> AsyncIterator[str]:
                 })
                 yield f"data: {data}\n\n"
 
-            # Small delay to ensure proper flushing
+            # Flush immediately
             await asyncio.sleep(0)
+
+        # If no content was generated, send a message
+        if not has_content:
+            data = json.dumps({
+                "type": "content",
+                "content": "I've searched for the information but couldn't generate a response. Please try again.",
+                "token": 0
+            })
+            yield f"data: {data}\n\n"
 
         # Send completion event
         yield f"data: {json.dumps({'type': 'done', 'total_tokens': token_count})}\n\n"
 
+    except asyncio.TimeoutError:
+        # Timeout error
+        error_data = json.dumps({
+            "type": "error",
+            "error": "Request timed out. The tool took too long to respond."
+        })
+        yield f"data: {error_data}\n\n"
     except Exception as e:
         # Send error event
-        error_data = json.dumps({"type": "error", "error": str(e)})
+        import traceback
+        error_msg = f"{str(e)}\n{traceback.format_exc()}"
+        error_data = json.dumps({"type": "error", "error": error_msg})
         yield f"data: {error_data}\n\n"
 
 
