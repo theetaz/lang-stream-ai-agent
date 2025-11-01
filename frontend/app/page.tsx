@@ -47,7 +47,11 @@ export default function Home() {
         setSession({ user });
         setLoading(false);
       } else {
-        // Token invalid or expired, redirect to login
+        // Token invalid or expired, clear it and redirect to login
+        localStorage.removeItem("backend_access_token");
+        localStorage.removeItem("backend_refresh_token");
+        localStorage.removeItem("backend_user");
+        localStorage.removeItem("backend_session_id");
         router.push("/login");
       }
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { signInWithGoogle, loginWithEmailPassword, registerWithEmailPassword, getBackendAccessToken } from "@/lib/auth-client";
+import { signInWithGoogle, loginWithEmailPassword, registerWithEmailPassword, getBackendAccessToken, getCurrentUser } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,11 +23,24 @@ export default function LoginPage() {
     const checkSession = async () => {
       // Check if we have backend tokens
       const backendToken = getBackendAccessToken();
-      if (backendToken) {
+      if (!backendToken) {
+        setChecking(false);
+        return;
+      }
+
+      // Validate token by checking current user
+      const user = await getCurrentUser();
+      if (user) {
+        // Token is valid, redirect to home
         router.push("/");
         return;
       }
 
+      // Token is invalid/expired, clear it and show login form
+      localStorage.removeItem("backend_access_token");
+      localStorage.removeItem("backend_refresh_token");
+      localStorage.removeItem("backend_user");
+      localStorage.removeItem("backend_session_id");
       setChecking(false);
     };
 
