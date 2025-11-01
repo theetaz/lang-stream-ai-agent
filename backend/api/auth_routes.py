@@ -419,35 +419,6 @@ async def get_sessions(
     }
 
 
-@router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
-):
-    """
-    Delete a specific session by session_id.
-    User can only delete their own sessions.
-    
-    Args:
-        session_id: Session ID to delete
-        
-    Returns:
-        Success message
-    """
-    session = await get_session_by_id(db, session_id)
-    
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    if session.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Cannot delete other user's session")
-    
-    await deactivate_session(db, session_id)
-    
-    return {"message": "Session deleted successfully"}
-
-
 @router.delete("/sessions/all")
 async def delete_all_sessions(
     request: Request,
@@ -487,3 +458,32 @@ async def delete_all_sessions(
     count = await deactivate_all_user_sessions(db, user_id)
     
     return {"message": f"Logged out from {count} session(s)"}
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Delete a specific session by session_id.
+    User can only delete their own sessions.
+    
+    Args:
+        session_id: Session ID to delete
+        
+    Returns:
+        Success message
+    """
+    session = await get_session_by_id(db, session_id)
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot delete other user's session")
+    
+    await deactivate_session(db, session_id)
+    
+    return {"message": "Session deleted successfully"}
