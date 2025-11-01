@@ -3,7 +3,7 @@ from typing import AsyncIterator, Literal
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
-from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_tavily import TavilySearch
 from langgraph.prebuilt import ToolNode
 
 
@@ -24,12 +24,13 @@ def get_llm():
 
 def get_tools():
     """Get available tools for the agent"""
-    # Initialize Tavily search tool
-    search = TavilySearchResults(
+    # Initialize Tavily search tool with the updated API
+    search = TavilySearch(
         max_results=3,
         search_depth="advanced",
         include_answer=True,
         include_raw_content=False,
+        include_images=False,
     )
     return [search]
 
