@@ -18,11 +18,23 @@ export async function fetchAPI(endpoint: string, options?: RequestInit) {
   return response.json();
 }
 
+export interface ChatMessage {
+  input: string;
+}
+
+export interface ChatResponse {
+  response: string;
+}
+
 export const api = {
   // Health check
   health: () => fetchAPI('/'),
 
-  // Add your API endpoints here
-  // Example:
-  // getAgents: () => fetchAPI('/api/v1/agents'),
+  // Chat endpoint
+  chat: async (message: string): Promise<ChatResponse> => {
+    return fetchAPI('/api/v1/chat', {
+      method: 'POST',
+      body: JSON.stringify({ input: message }),
+    });
+  },
 };
