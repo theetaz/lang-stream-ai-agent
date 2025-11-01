@@ -450,15 +450,40 @@ async def delete_session(
 
 @router.delete("/sessions/all")
 async def delete_all_sessions(
-    current_user = Depends(get_current_user),
+    request: Request,
     db: AsyncSession = Depends(get_async_db)
 ):
     """
     Delete all sessions for the current user (logout from all devices).
     
+    Note: This endpoint extracts user_id directly from the token without
+    validating the session, since we're deleting all sessions anyway.
+    
     Returns:
         Success message with count of deleted sessions
     """
-    count = await deactivate_all_user_sessions(db, current_user.id)
+    # Extract user_id from token without session validation
+    # This allows deleting all sessions even if current session is invalid
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    
+    token = auth_header.replace("Bearer ", "")
+    payload = verify_token(token, token_type="access")
+    
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+    
+    # Verify user exists and is active
+    user = await get_user_by_id(db, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+    
+    # Deactivate all sessions for this user
+    count = await deactivate_all_user_sessions(db, user_id)
     
     return {"message": f"Logged out from {count} session(s)"}
