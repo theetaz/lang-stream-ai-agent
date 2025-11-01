@@ -1,10 +1,12 @@
 import { cn } from "@/lib/utils"
 import { Bot, User } from "lucide-react"
+import { ToolCall, type ToolCallData } from "@/components/tool-call"
 
 export interface Message {
   id: string
   role: "user" | "assistant"
   content: string
+  toolCalls?: ToolCallData[]
   timestamp?: Date
 }
 
@@ -33,15 +35,28 @@ export function ChatMessage({ message }: ChatMessageProps) {
           </div>
         )}
       </div>
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-3">
         <p className="text-sm font-semibold">
           {isUser ? "You" : "AI Assistant"}
         </p>
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">
-            {message.content}
-          </p>
-        </div>
+
+        {/* Tool Calls */}
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="space-y-2">
+            {message.toolCalls.map((toolCall) => (
+              <ToolCall key={toolCall.id} toolCall={toolCall} />
+            ))}
+          </div>
+        )}
+
+        {/* Message Content */}
+        {message.content && (
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+              {message.content}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,9 +1,22 @@
 import { useState, useCallback, useRef } from "react"
+import type { ToolCallData } from "@/components/tool-call"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
+export interface StreamEvent {
+  type: "content" | "tool_start" | "tool_call" | "tool_result" | "tool_thinking" | "done" | "error"
+  content?: string
+  tool?: string
+  input?: Record<string, any>
+  result?: string
+  message?: string
+  tool_name?: string
+  error?: string
+}
+
 interface UseChatStreamOptions {
   onChunk?: (chunk: string) => void
+  onToolEvent?: (event: StreamEvent) => void
   onComplete?: (fullMessage: string) => void
   onError?: (error: Error) => void
 }
@@ -72,21 +85,31 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
               const data = line.slice(6).trim()
 
               try {
-                const parsed = JSON.parse(data)
+                const parsed: StreamEvent = JSON.parse(data)
 
-                if (parsed.error) {
+                if (parsed.type === "error" && parsed.error) {
                   throw new Error(parsed.error)
                 }
 
-                if (parsed.done) {
+                if (parsed.type === "done") {
                   options.onComplete?.(currentMessageRef.current)
                   break
                 }
 
-                if (parsed.content) {
+                if (parsed.type === "content" && parsed.content) {
                   currentMessageRef.current += parsed.content
                   // Call onChunk immediately for real-time display
                   options.onChunk?.(parsed.content)
+                }
+
+                // Handle tool events
+                if (
+                  parsed.type === "tool_start" ||
+                  parsed.type === "tool_call" ||
+                  parsed.type === "tool_result" ||
+                  parsed.type === "tool_thinking"
+                ) {
+                  options.onToolEvent?.(parsed)
                 }
               } catch (e) {
                 // Only throw if it's not a JSON parse error

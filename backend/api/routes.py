@@ -20,28 +20,70 @@ class ChatResponse(BaseModel):
 async def event_stream(user_input: str) -> AsyncIterator[str]:
     """
     Generate Server-Sent Events stream for chat responses.
-    Streams tokens in real-time as they arrive from OpenAI.
+    Streams tokens and tool call events in real-time.
     """
     try:
         # Send initial connection confirmation
         yield f": connected\n\n"
 
         token_count = 0
-        async for chunk in stream_graph(user_input):
-            # Format as SSE and yield immediately
-            data = json.dumps({"content": chunk, "token": token_count})
-            yield f"data: {data}\n\n"
-            token_count += 1
+        async for event in stream_graph(user_input):
+            event_type = event.get("type")
+            event_data = event.get("data", {})
 
-            # Small delay to ensure proper flushing (optional, but helps with buffering)
+            # Handle different event types
+            if event_type == "token":
+                # Regular token from LLM
+                data = json.dumps({
+                    "type": "content",
+                    "content": event_data.get("content", ""),
+                    "token": token_count
+                })
+                yield f"data: {data}\n\n"
+                token_count += 1
+
+            elif event_type == "tool_start":
+                # Tool execution started
+                data = json.dumps({
+                    "type": "tool_start",
+                    "message": event_data.get("message", "Using tools...")
+                })
+                yield f"data: {data}\n\n"
+
+            elif event_type == "tool_thinking":
+                # AI is thinking about using a tool
+                data = json.dumps({
+                    "type": "tool_thinking",
+                    "tool_name": event_data.get("tool_name", "")
+                })
+                yield f"data: {data}\n\n"
+
+            elif event_type == "tool_call":
+                # Tool is being called
+                data = json.dumps({
+                    "type": "tool_call",
+                    "tool": event_data.get("tool", ""),
+                    "input": event_data.get("input", {})
+                })
+                yield f"data: {data}\n\n"
+
+            elif event_type == "tool_result":
+                # Tool execution completed
+                data = json.dumps({
+                    "type": "tool_result",
+                    "result": event_data.get("result", "")
+                })
+                yield f"data: {data}\n\n"
+
+            # Small delay to ensure proper flushing
             await asyncio.sleep(0)
 
         # Send completion event
-        yield f"data: {json.dumps({'done': True, 'total_tokens': token_count})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'total_tokens': token_count})}\n\n"
 
     except Exception as e:
         # Send error event
-        error_data = json.dumps({"error": str(e)})
+        error_data = json.dumps({"type": "error", "error": str(e)})
         yield f"data: {error_data}\n\n"
 
 
