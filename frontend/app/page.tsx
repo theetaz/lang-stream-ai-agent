@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Sparkles, LogOut, Loader2 } from "lucide-react";
 import { useChatStream, type StreamEvent } from "@/lib/hooks/use-chat-stream";
 import { ToolCall, type ToolCallData } from "@/components/tool-call";
-import { useSession, signOut } from "@/lib/auth-client";
+import { authClient, signOut, getBackendAccessToken } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,21 +23,45 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function Home() {
   const router = useRouter();
-  const { data: session, isPending } = useSession();
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingToolCalls, setStreamingToolCalls] = useState<ToolCallData[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Redirect to login if not authenticated
+  // Check authentication on mount
   useEffect(() => {
-    if (!isPending && !session) {
-      router.push("/login");
-    }
-  }, [isPending, session, router]);
+    const checkAuth = async () => {
+      console.log("Checking authentication...");
+
+      // Check backend token first
+      const backendToken = getBackendAccessToken();
+      if (!backendToken) {
+        console.log("No backend token, redirecting to login...");
+        router.push("/login");
+        return;
+      }
+
+      // Get Better Auth session
+      const betterAuthSession = await authClient.getSession();
+      if (betterAuthSession.data) {
+        console.log("Authenticated:", betterAuthSession.data.user.email);
+        setSession(betterAuthSession.data);
+      } else {
+        console.log("No Better Auth session, redirecting to login...");
+        router.push("/login");
+        return;
+      }
+
+      setLoading(false);
+    };
+
+    checkAuth();
+  }, [router]);
 
   // Show loading state while checking authentication
-  if (isPending) {
+  if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center space-y-4">
@@ -48,9 +72,16 @@ export default function Home() {
     );
   }
 
-  // Don't render anything if not authenticated (will redirect)
+  // Don't render if not authenticated
   if (!session) {
-    return null;
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Redirecting to login...</p>
+        </div>
+      </div>
+    );
   }
 
   const handleSignOut = async () => {

@@ -1,44 +1,60 @@
 "use client";
 
-import { signIn } from "@/lib/auth-client";
+import { signInWithGoogle, authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [checking, setChecking] = useState(true);
 
   // Check if user is already logged in
   useEffect(() => {
     const checkSession = async () => {
-      try {
-        const res = await fetch("/api/auth/session");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.session) {
-            router.push("/");
-          }
-        }
-      } catch (error) {
-        console.error("Session check failed:", error);
+      console.log("Login page: Checking existing session...");
+
+      // Check if we have backend tokens
+      const backendToken = localStorage.getItem("backend_access_token");
+      if (backendToken) {
+        console.log("Login page: Found backend token, redirecting to home...");
+        router.push("/");
+        return;
       }
+
+      // Check Better Auth session
+      const session = await authClient.getSession();
+      if (session.data) {
+        console.log("Login page: Found Better Auth session, redirecting to home...");
+        router.push("/");
+        return;
+      }
+
+      console.log("Login page: No existing session");
+      setChecking(false);
     };
 
     checkSession();
   }, [router]);
 
   const handleGoogleSignIn = async () => {
-    try {
-      await signIn.social({
-        provider: "google",
-        callbackURL: "/",
-      });
-    } catch (error) {
-      console.error("Sign in failed:", error);
-    }
+    console.log("Login page: Starting Google OAuth flow with Better Auth...");
+    await signInWithGoogle();
   };
+
+  // Show loading while checking for existing session
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
+          <p className="text-muted-foreground">Checking session...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">

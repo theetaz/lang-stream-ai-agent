@@ -1,39 +1,59 @@
 /**
- * Better Auth server configuration
- * Handles Google OAuth authentication
+ * Better Auth Server Configuration
+ * Handles Google OAuth and stores custom JWT from our backend
  */
 import { betterAuth } from "better-auth";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import Database from "better-auth/adapters/postgres";
+import { nextCookies } from "better-auth/next-js";
 
 export const auth = betterAuth({
-  database: new Database({
-    host: process.env.POSTGRES_HOST || "localhost",
-    port: parseInt(process.env.POSTGRES_PORT || "5433"),
-    user: process.env.POSTGRES_USER || "postgres",
-    password: process.env.POSTGRES_PASSWORD || "",
-    database: process.env.POSTGRES_DB || "lang_ai_agent",
-  }),
-
-  emailAndPassword: {
-    enabled: false, // Only using OAuth
+  database: {
+    provider: "postgres",
+    url: process.env.DATABASE_URL || `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}:${process.env.POSTGRES_PORT}/${process.env.POSTGRES_DB}`,
   },
 
   socialProviders: {
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-      // Redirect URI will be: http://localhost:3000/api/auth/callback/google
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      // Get refresh token
+      accessType: "offline",
+      prompt: "select_account consent",
     },
   },
 
-  secret: process.env.BETTER_AUTH_SECRET || "",
-
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
-
-  // Optional: customize session behavior
+  // Custom session configuration to store our backend JWT
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 5, // 5 minutes
+    },
+  },
+
+  // Use next-cookies plugin for server actions support
+  plugins: [nextCookies()],
+
+  // Custom callbacks to integrate with our backend
+  callbacks: {
+    async signIn(data) {
+      // This is called after OAuth success
+      // We'll send user data to our backend here
+      console.log("Better Auth: Sign in callback", data);
+      return true; // Allow sign in
+    },
+
+    async session(data) {
+      // Add our custom JWT to the session
+      return {
+        ...data.session,
+        user: {
+          ...data.session.user,
+          // Custom fields will be added here
+        },
+      };
+    },
   },
 });
+
+export type Session = typeof auth.$Infer.Session;

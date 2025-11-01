@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from api.routes import router as api_router
 from api.user_routes import router as user_router
+from api.auth_routes import router as auth_router
 from database import init_db, close_db
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +37,7 @@ app.add_middleware(
 )
 
 # Register routers
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(user_router, prefix="/api/v1")
 
