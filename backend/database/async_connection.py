@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     AsyncEngine,
 )
-from sqlalchemy.orm import declarative_base
+
+# Use Base from models.base instead of creating a new one
+from models.base import Base
 
 # Load environment variables
 load_dotenv()
@@ -48,9 +50,6 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
-# Declarative base for models
-Base = declarative_base()
-
 
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """
@@ -81,7 +80,9 @@ async def init_db() -> None:
     This should be called on application startup.
     """
     # Import all models here to ensure they're registered
-    from database.models import User
+    from models.user import User
+    from models.session import Session
+    from models.base import Base
 
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

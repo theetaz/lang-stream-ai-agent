@@ -1,11 +1,17 @@
+"""
+Main FastAPI application.
+"""
 from contextlib import asynccontextmanager
 
-from api.routes import router as api_router
-from api.user_routes import router as user_router
-from api.auth_routes import router as auth_router
-from database import init_db, close_db
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from database.async_connection import init_db, close_db
+from api.v1.auth.routes import router as auth_router
+from api.v1.user.routes import router as user_router
+from api.v1.chat.routes import router as chat_router
+from common.errors import AppError, app_error_handler
+from config.settings import get_settings
 
 
 @asynccontextmanager
@@ -25,12 +31,13 @@ async def lifespan(app: FastAPI):
     print("✓ Database connections closed")
 
 
-app = FastAPI(title="AI Agent API", lifespan=lifespan)
+app = FastAPI(title="AI Agent API", version="1.0", lifespan=lifespan)
 
 # Configure CORS
+settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://frontend:3000"],
+    allow_origins=settings["cors_origins"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,8 +45,11 @@ app.add_middleware(
 
 # Register routers
 app.include_router(auth_router, prefix="/api/v1")
-app.include_router(api_router, prefix="/api/v1")
 app.include_router(user_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
+
+# Global exception handlers
+app.add_exception_handler(AppError, app_error_handler)
 
 
 @app.get("/")

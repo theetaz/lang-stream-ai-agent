@@ -13,10 +13,11 @@ from alembic import context
 
 # Import database configuration and models
 from database.async_connection import DATABASE_URL
-from database.base import Base
+from models.base import Base
 
 # Import all models to ensure they're registered with Base
-from database.models import User
+from models.user import User
+from models.session import Session
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

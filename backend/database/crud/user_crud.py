@@ -2,10 +2,12 @@
 Async CRUD operations for User model.
 All operations are non-blocking and use async/await.
 """
-from typing import Optional, List
+
+from typing import List, Optional
+
+from models.user import User
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from database.models.user import User
 
 
 async def create_user(
