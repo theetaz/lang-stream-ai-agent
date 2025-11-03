@@ -1,15 +1,15 @@
-import os
 from typing import AsyncIterator, Literal
+
+from config.settings import settings
+from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
-from langchain_tavily import TavilySearch
 from langgraph.prebuilt import ToolNode
 
 
 def get_llm():
     """Get ChatOpenAI instance with tool binding"""
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = settings.OPENAI_API_KEY
     if not api_key or api_key == "your_openai_api_key_here":
         raise ValueError(
             "OPENAI_API_KEY not set. Please add your OpenAI API key to the .env file"
@@ -19,6 +19,7 @@ def get_llm():
         model="gpt-4o-mini",
         temperature=0.7,
         streaming=True,
+        api_key=api_key,
     )
 
 
@@ -134,14 +135,13 @@ async def stream_graph(user_input: str) -> AsyncIterator[dict]:
     Yields events as dictionaries with type and data.
     """
     import logging
+
     logger = logging.getLogger(__name__)
 
     graph = get_graph()
 
     # Create input with proper message format
-    input_data = {
-        "messages": [HumanMessage(content=user_input)]
-    }
+    input_data = {"messages": [HumanMessage(content=user_input)]}
 
     current_node = None
     tool_call_active = False
@@ -163,7 +163,7 @@ async def stream_graph(user_input: str) -> AsyncIterator[dict]:
                     tool_call_active = True
                     yield {
                         "type": "tool_start",
-                        "data": {"message": "Searching the web..."}
+                        "data": {"message": "Searching the web..."},
                     }
 
             # Tool execution started
@@ -173,19 +173,18 @@ async def stream_graph(user_input: str) -> AsyncIterator[dict]:
                 logger.info(f"Tool started: {tool_name} with input: {tool_input}")
                 yield {
                     "type": "tool_call",
-                    "data": {
-                        "tool": tool_name,
-                        "input": tool_input
-                    }
+                    "data": {"tool": tool_name, "input": tool_input},
                 }
 
             # Tool execution completed
             if kind == "on_tool_end":
                 tool_output = event.get("data", {}).get("output", "")
-                logger.info(f"Tool completed with output length: {len(str(tool_output))}")
+                logger.info(
+                    f"Tool completed with output length: {len(str(tool_output))}"
+                )
                 yield {
                     "type": "tool_result",
-                    "data": {"result": str(tool_output)[:500]}  # Limit result size
+                    "data": {"result": str(tool_output)[:500]},  # Limit result size
                 }
 
             # Track when tools node ends
@@ -200,10 +199,7 @@ async def stream_graph(user_input: str) -> AsyncIterator[dict]:
                 # Stream text content
                 if hasattr(content, "content") and content.content:
                     # Only stream final response tokens (after tools if any)
-                    yield {
-                        "type": "token",
-                        "data": {"content": content.content}
-                    }
+                    yield {"type": "token", "data": {"content": content.content}}
 
                 # Tool calls in the stream (when model decides to use tools)
                 if hasattr(content, "tool_call_chunks") and content.tool_call_chunks:
@@ -211,7 +207,7 @@ async def stream_graph(user_input: str) -> AsyncIterator[dict]:
                         if tool_call_chunk.get("name"):
                             yield {
                                 "type": "tool_thinking",
-                                "data": {"tool_name": tool_call_chunk["name"]}
+                                "data": {"tool_name": tool_call_chunk["name"]},
                             }
 
         logger.info(f"Stream completed. Total events: {event_count}")
