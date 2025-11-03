@@ -1,12 +1,9 @@
-"""
-Chat service layer.
-Contains all business logic for chat operations.
-"""
-import json
 import asyncio
+import json
 from typing import AsyncIterator
+
 from agents.langgraph_agent import get_graph, stream_graph
-from schemas.post import ChatRequest, ChatResponse
+from schemas.chat import ChatRequest, ChatResponse
 
 
 class ChatService:
@@ -32,45 +29,52 @@ class ChatService:
                 if event_type == "token":
                     # Regular token from LLM
                     has_content = True
-                    data = json.dumps({
-                        "type": "content",
-                        "content": event_data.get("content", ""),
-                        "token": token_count
-                    })
+                    data = json.dumps(
+                        {
+                            "type": "content",
+                            "content": event_data.get("content", ""),
+                            "token": token_count,
+                        }
+                    )
                     yield f"data: {data}\n\n"
                     token_count += 1
 
                 elif event_type == "tool_start":
                     # Tool execution started
-                    data = json.dumps({
-                        "type": "tool_start",
-                        "message": event_data.get("message", "Using tools...")
-                    })
+                    data = json.dumps(
+                        {
+                            "type": "tool_start",
+                            "message": event_data.get("message", "Using tools..."),
+                        }
+                    )
                     yield f"data: {data}\n\n"
 
                 elif event_type == "tool_thinking":
                     # AI is thinking about using a tool
-                    data = json.dumps({
-                        "type": "tool_thinking",
-                        "tool_name": event_data.get("tool_name", "")
-                    })
+                    data = json.dumps(
+                        {
+                            "type": "tool_thinking",
+                            "tool_name": event_data.get("tool_name", ""),
+                        }
+                    )
                     yield f"data: {data}\n\n"
 
                 elif event_type == "tool_call":
                     # Tool is being called
-                    data = json.dumps({
-                        "type": "tool_call",
-                        "tool": event_data.get("tool", ""),
-                        "input": event_data.get("input", {})
-                    })
+                    data = json.dumps(
+                        {
+                            "type": "tool_call",
+                            "tool": event_data.get("tool", ""),
+                            "input": event_data.get("input", {}),
+                        }
+                    )
                     yield f"data: {data}\n\n"
 
                 elif event_type == "tool_result":
                     # Tool execution completed
-                    data = json.dumps({
-                        "type": "tool_result",
-                        "result": event_data.get("result", "")
-                    })
+                    data = json.dumps(
+                        {"type": "tool_result", "result": event_data.get("result", "")}
+                    )
                     yield f"data: {data}\n\n"
 
                 # Flush immediately
@@ -78,11 +82,13 @@ class ChatService:
 
             # If no content was generated, send a message
             if not has_content:
-                data = json.dumps({
-                    "type": "content",
-                    "content": "I've searched for the information but couldn't generate a response. Please try again.",
-                    "token": 0
-                })
+                data = json.dumps(
+                    {
+                        "type": "content",
+                        "content": "I've searched for the information but couldn't generate a response. Please try again.",
+                        "token": 0,
+                    }
+                )
                 yield f"data: {data}\n\n"
 
             # Send completion event
@@ -90,14 +96,17 @@ class ChatService:
 
         except asyncio.TimeoutError:
             # Timeout error
-            error_data = json.dumps({
-                "type": "error",
-                "error": "Request timed out. The tool took too long to respond."
-            })
+            error_data = json.dumps(
+                {
+                    "type": "error",
+                    "error": "Request timed out. The tool took too long to respond.",
+                }
+            )
             yield f"data: {error_data}\n\n"
         except Exception as e:
             # Send error event
             import traceback
+
             error_msg = f"{str(e)}\n{traceback.format_exc()}"
             error_data = json.dumps({"type": "error", "error": error_msg})
             yield f"data: {error_data}\n\n"
@@ -105,7 +114,9 @@ class ChatService:
     async def chat(self, request: ChatRequest) -> ChatResponse:
         """Non-streaming chat endpoint (fallback)."""
         graph = get_graph()
-        result = graph.invoke({"messages": [{"role": "user", "content": request.input}]})
+        result = graph.invoke(
+            {"messages": [{"role": "user", "content": request.input}]}
+        )
 
         # Extract the AI response from the result
         messages = result.get("messages", [])
@@ -115,7 +126,9 @@ class ChatService:
             if hasattr(ai_message, "content"):
                 response_text = ai_message.content
             elif isinstance(ai_message, dict):
-                response_text = ai_message.get("content", "I'm sorry, I couldn't process your request.")
+                response_text = ai_message.get(
+                    "content", "I'm sorry, I couldn't process your request."
+                )
             else:
                 response_text = str(ai_message)
         else:
@@ -128,4 +141,3 @@ class ChatService:
         graph = get_graph()
         response = graph.invoke({"messages": [{"role": "user", "content": "hi!"}]})
         return {"response": response}
-

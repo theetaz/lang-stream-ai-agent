@@ -1,13 +1,7 @@
-"""
-Chat API routes.
-Only HTTP handling and service calls. No business logic.
-"""
+from api.v1.chat.service import ChatService
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-
-from api.v1.chat.service import ChatService
-from schemas.post import ChatRequest, ChatResponse
-
+from schemas.chat import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -49,4 +43,3 @@ async def run_agent(
 ):
     """Legacy agent endpoint (kept for backwards compatibility)."""
     return await service.run_agent()
-
