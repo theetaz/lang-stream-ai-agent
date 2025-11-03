@@ -8,8 +8,8 @@ Base = declarative_base()
 
 
 def utc_now():
-    """Get current UTC datetime (timezone-aware)."""
-    return datetime.now(timezone.utc)
+    """Get current UTC datetime (timezone-naive for database compatibility)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TimestampMixin:
