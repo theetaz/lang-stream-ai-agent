@@ -1,8 +1,6 @@
 from contextlib import asynccontextmanager
 
-from api.v1.auth.routes import router as auth_router
-from api.v1.chat.routes import router as chat_router
-from api.v1.user.routes import router as user_router
+from api.v1.router import api_v1_router
 from common.errors import AppError, app_error_handler
 from common.logger import get_logger
 from config.settings import get_settings
@@ -42,10 +40,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
-app.include_router(auth_router, prefix="/api/v1")
-app.include_router(user_router, prefix="/api/v1")
-app.include_router(chat_router, prefix="/api/v1")
+# Register api v1 routers
+app.include_router(api_v1_router)
 
 # Global exception handlers
 app.add_exception_handler(AppError, app_error_handler)
