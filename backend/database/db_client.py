@@ -1,8 +1,3 @@
-"""
-Database client configuration with async and sync support.
-Uses asyncpg driver for async operations and psycopg2 for sync operations.
-"""
-
 from typing import AsyncGenerator
 
 from config.settings import settings
@@ -47,17 +42,6 @@ SyncSessionLocal = sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Async database session dependency for FastAPI routes.
-
-    Usage in FastAPI routes:
-    ```python
-    @router.get("/users")
-    async def get_users(db: AsyncSession = Depends(get_db)):
-        result = await db.execute(select(User))
-        return result.scalars().all()
-    ```
-    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -70,15 +54,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 def get_sync_db():
-    """
-    Sync database session dependency (use only when async is not possible).
-
-    Usage:
-    ```python
-    def sync_operation(db: Session = Depends(get_sync_db)):
-        return db.query(User).all()
-    ```
-    """
     db = SyncSessionLocal()
     try:
         yield db
@@ -87,15 +62,6 @@ def get_sync_db():
 
 
 async def init_db() -> None:
-    """
-    Initialize database by creating all tables based on SQLAlchemy models.
-    This should be called on application startup.
-
-    Best Practice:
-    - Import all models to ensure they're registered with Base.metadata
-    - Uses run_sync to execute create_all within async context
-    - Idempotent: safe to run multiple times (only creates missing tables)
-    """
     # Import all models here to ensure they're registered with Base
     from models.session import Session  # noqa: F401
     from models.user import User  # noqa: F401

@@ -1,11 +1,7 @@
-"""
-Base classes and common imports for database models.
-"""
-
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy import Column, DateTime
+from sqlalchemy.orm import declarative_base
 
 # Declarative base for all models
 Base = declarative_base()
