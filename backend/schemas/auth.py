@@ -1,11 +1,9 @@
-"""
-Pydantic schemas for Authentication API endpoints.
-"""
 from pydantic import BaseModel, EmailStr
 
 
 class GoogleAuthRequest(BaseModel):
     """Request from frontend after Google OAuth success"""
+
     google_id: str
     email: EmailStr
     name: str | None = None
@@ -14,6 +12,7 @@ class GoogleAuthRequest(BaseModel):
 
 class EmailPasswordRegisterRequest(BaseModel):
     """Request for email/password registration"""
+
     email: EmailStr
     password: str
     name: str | None = None
@@ -21,12 +20,14 @@ class EmailPasswordRegisterRequest(BaseModel):
 
 class EmailPasswordLoginRequest(BaseModel):
     """Request for email/password login"""
+
     email: EmailStr
     password: str
 
 
 class TokenResponse(BaseModel):
     """JWT token response"""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -36,11 +37,13 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     """Request to refresh access token"""
+
     refresh_token: str
 
 
 class UserResponse(BaseModel):
     """User info response"""
+
     id: int
     email: str
     name: str | None
@@ -50,6 +53,7 @@ class UserResponse(BaseModel):
 
 class SessionResponse(BaseModel):
     """Session info response"""
+
     id: str
     device_info: str | None
     ip_address: str | None
@@ -62,5 +66,5 @@ class SessionResponse(BaseModel):
 
 class SessionsListResponse(BaseModel):
     """List of sessions response"""
-    sessions: list[SessionResponse]
 
+    sessions: list[SessionResponse]

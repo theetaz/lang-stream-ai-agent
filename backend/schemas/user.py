@@ -1,9 +1,6 @@
-"""
-Pydantic schemas for User API endpoints.
-Used for request validation and response serialization.
-"""
 from datetime import datetime
 from typing import Optional
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -12,13 +9,17 @@ class UserBase(BaseModel):
 
     email: EmailStr = Field(..., description="User's email address")
     name: Optional[str] = Field(None, max_length=255, description="User's full name")
-    avatar_url: Optional[str] = Field(None, max_length=512, description="URL to user's profile picture")
+    avatar_url: Optional[str] = Field(
+        None, max_length=512, description="URL to user's profile picture"
+    )
 
 
 class UserCreate(UserBase):
     """Schema for creating a new user."""
 
-    google_id: Optional[str] = Field(None, max_length=255, description="Google OAuth user ID")
+    google_id: Optional[str] = Field(
+        None, max_length=255, description="Google OAuth user ID"
+    )
 
 
 class UserUpdate(BaseModel):
@@ -26,7 +27,9 @@ class UserUpdate(BaseModel):
 
     email: Optional[EmailStr] = Field(None, description="New email address")
     name: Optional[str] = Field(None, max_length=255, description="New name")
-    avatar_url: Optional[str] = Field(None, max_length=512, description="New avatar URL")
+    avatar_url: Optional[str] = Field(
+        None, max_length=512, description="New avatar URL"
+    )
     is_active: Optional[bool] = Field(None, description="Active status")
 
 
@@ -50,4 +53,3 @@ class UserListResponse(BaseModel):
     total: int = Field(..., description="Total number of users")
     skip: int = Field(..., description="Number of users skipped")
     limit: int = Field(..., description="Maximum number of users returned")
-
