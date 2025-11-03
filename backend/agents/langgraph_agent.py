@@ -46,6 +46,7 @@ def get_tools():
         from langchain_tavily import TavilySearch
 
         search_tool = TavilySearch(
+            tavily_api_key=settings.TAVILY_API_KEY,  # Note: parameter name is 'tavily_api_key'
             max_results=3,
             search_depth="advanced",
             include_answer=True,
