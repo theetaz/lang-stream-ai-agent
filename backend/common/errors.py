@@ -39,8 +39,10 @@ class ForbiddenError(AppError):
 def app_error_handler(request, exc: AppError):
     """Global exception handler for AppError."""
     from fastapi.responses import JSONResponse
+    from common.response import error_response
 
+    response = error_response(message=exc.detail)
     return JSONResponse(
         status_code=exc.status_code,
-        content={"success": False, "message": exc.detail, "data": None},
+        content=response.model_dump(),
     )
