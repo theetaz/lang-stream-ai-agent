@@ -62,9 +62,14 @@ def get_sync_db():
 
 
 async def init_db() -> None:
-    # Import all models here to ensure they're registered with Base
-    from models.session import Session  # noqa: F401
-    from models.user import User  # noqa: F401
+    """
+    Initialize database by creating all tables based on SQLAlchemy models.
+    This should be called on application startup.
+
+    All models are automatically imported via models/__init__.py
+    """
+    # Import models package to ensure all models are registered with Base
+    import models  # noqa: F401
 
     async with async_engine.begin() as conn:
         # Create all tables defined in Base.metadata
