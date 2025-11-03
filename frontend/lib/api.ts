@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface APIResponse<T> {
   success: boolean;
@@ -7,21 +7,26 @@ export interface APIResponse<T> {
   metadata?: Record<string, any> | null;
 }
 
-export async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<APIResponse<T>> {
+export async function fetchAPI<T>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<APIResponse<T>> {
   const url = `${API_URL}${endpoint}`;
 
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+      "Content-Type": "application/json",
+      ...options?.headers
+    }
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || `API request failed: ${response.statusText}`);
+    throw new Error(
+      data.message || `API request failed: ${response.statusText}`
+    );
   }
 
   return data;
@@ -36,11 +41,11 @@ export interface ChatResponse {
 }
 
 export const api = {
-  health: () => fetchAPI('/'),
+  health: () => fetchAPI("/"),
   chat: async (message: string): Promise<APIResponse<ChatResponse>> => {
-    return fetchAPI('/api/v1/chat', {
-      method: 'POST',
-      body: JSON.stringify({ input: message }),
+    return fetchAPI("/api/v1/chat", {
+      method: "POST",
+      body: JSON.stringify({ input: message })
     });
-  },
+  }
 };
