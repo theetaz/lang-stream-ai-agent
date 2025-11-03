@@ -4,10 +4,13 @@ from api.v1.auth.routes import router as auth_router
 from api.v1.chat.routes import router as chat_router
 from api.v1.user.routes import router as user_router
 from common.errors import AppError, app_error_handler
+from common.logger import get_logger
 from config.settings import get_settings
 from database.db_client import close_db, init_db
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -18,13 +21,13 @@ async def lifespan(app: FastAPI):
     """
     # Startup: Initialize database tables
     await init_db()
-    print("✓ Database initialized successfully")
+    logger.info("Database initialized successfully")
 
     yield
 
     # Shutdown: Close database connections
     await close_db()
-    print("✓ Database connections closed")
+    logger.info("Database connections closed")
 
 
 app = FastAPI(title="AI Agent API", version="1.0", lifespan=lifespan)
