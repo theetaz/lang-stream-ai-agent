@@ -1,17 +1,13 @@
-"""
-Main FastAPI application.
-"""
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-from database.db_client import init_db, close_db
 from api.v1.auth.routes import router as auth_router
-from api.v1.user.routes import router as user_router
 from api.v1.chat.routes import router as chat_router
+from api.v1.user.routes import router as user_router
 from common.errors import AppError, app_error_handler
 from config.settings import get_settings
+from database.db_client import close_db, init_db
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 
 @asynccontextmanager

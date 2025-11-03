@@ -26,3 +26,6 @@ frontend/.turbo
 docker-compose.override.yml
 .cloudflared
 .claude
+
+# backend logs
+backend/logs
