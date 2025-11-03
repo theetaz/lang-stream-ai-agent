@@ -1,9 +1,10 @@
 from auth.jwt import verify_token
 from database.db_client import get_db
-from database.crud.session_crud import get_session_by_id, update_session_activity
-from database.crud.user_crud import get_user_by_id
 from fastapi import Depends, HTTPException, Request, status
+from models.session import Session
+from models.user import User
 from passlib.context import CryptContext
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from user_agents import parse as parse_user_agent
 
@@ -46,7 +47,6 @@ def get_device_info(user_agent: str | None) -> str | None:
 
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
-    """Dependency to get current user from JWT token and validate session."""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -70,19 +70,19 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
         )
 
-    # Check session validity if session_id exists
     if session_id:
-        session = await get_session_by_id(db, session_id)
+        result = await db.execute(select(Session).where(Session.id == session_id))
+        session = result.scalars().first()
         if not session or not session.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Session expired or invalid",
             )
+        await db.commit()
+        await db.refresh(session)
 
-        # Update session activity
-        await update_session_activity(db, session_id)
-
-    user = await get_user_by_id(db, user_id)
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

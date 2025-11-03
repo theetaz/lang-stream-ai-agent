@@ -7,9 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.db_client import get_db
 from api.v1.auth.service import AuthService
-from common.dependencies import get_current_user
-from auth.jwt import verify_token
-from database.crud.user_crud import get_user_by_id
+from auth.utils import get_current_user
 from schemas.auth import (
     GoogleAuthRequest,
     EmailPasswordRegisterRequest,

@@ -1,19 +1,8 @@
-"""
-User management API routes.
-Only HTTP handling and service calls. No business logic.
-"""
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from database.db_client import get_db
 from api.v1.user.service import UserService
-from schemas.user import (
-    UserCreate,
-    UserUpdate,
-    UserResponse,
-    UserListResponse,
-)
-
+from database.db_client import get_db
+from fastapi import APIRouter, Depends, Query
+from schemas.user import UserCreate, UserListResponse, UserResponse, UserUpdate
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -53,7 +42,9 @@ async def get_user_by_email_endpoint(
 @router.get("", response_model=UserListResponse)
 async def list_users_endpoint(
     skip: int = Query(0, ge=0, description="Number of users to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of users to return"),
+    limit: int = Query(
+        100, ge=1, le=1000, description="Maximum number of users to return"
+    ),
     active_only: bool = Query(False, description="Only return active users"),
     service: UserService = Depends(get_user_service),
 ):
@@ -87,4 +78,3 @@ async def deactivate_user_endpoint(
 ):
     """Deactivate a user (soft delete)."""
     return await service.deactivate_user(user_id)
-

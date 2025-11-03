@@ -1,124 +1,116 @@
-"""
-User management service layer.
-Contains all business logic for user operations.
-"""
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
+from typing import Optional
 
-from database.crud.user_crud import (
-    create_user,
-    get_user_by_id,
-    get_user_by_email,
-    list_users,
-    update_user,
-    delete_user,
-    deactivate_user,
-)
-from schemas.user import (
-    UserCreate,
-    UserUpdate,
-    UserResponse,
-    UserListResponse,
-)
-from common.errors import ValidationError, NotFoundError
+from common.errors import NotFoundError, ValidationError
+from models.user import User
+from schemas.user import UserCreate, UserListResponse, UserResponse, UserUpdate
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class UserService:
-    """Service for user management operations."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _get_user_by_id(self, user_id: int) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        return result.scalars().first()
+
+    async def _get_user_by_email(self, email: str) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.email == email))
+        return result.scalars().first()
+
+    async def _get_user_by_google_id(self, google_id: str) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.google_id == google_id))
+        return result.scalars().first()
+
     async def create_user(self, data: UserCreate) -> UserResponse:
-        """Create a new user."""
         try:
-            db_user = await create_user(
-                db=self.db,
+            user = User(
                 email=data.email,
                 google_id=data.google_id,
                 name=data.name,
                 avatar_url=data.avatar_url,
+                is_active=True,
             )
-            return UserResponse.model_validate(db_user)
+            self.db.add(user)
+            await self.db.commit()
+            await self.db.refresh(user)
+            return UserResponse.model_validate(user)
         except IntegrityError as e:
             await self.db.rollback()
             if "email" in str(e):
                 raise ValidationError(f"User with email {data.email} already exists")
             elif "google_id" in str(e):
-                raise ValidationError(f"User with google_id {data.google_id} already exists")
-            else:
-                raise ValidationError("Database integrity error")
+                raise ValidationError(
+                    f"User with google_id {data.google_id} already exists"
+                )
+            raise ValidationError("Database integrity error")
 
     async def get_user(self, user_id: int) -> UserResponse:
-        """Get a user by ID."""
-        user = await get_user_by_id(self.db, user_id)
-
+        user = await self._get_user_by_id(user_id)
         if not user:
             raise NotFoundError(f"User {user_id} not found")
-
         return UserResponse.model_validate(user)
 
-    async def get_user_by_email(self, email: str) -> UserResponse:
-        """Get a user by email address."""
-        user = await get_user_by_email(self.db, email)
-
+    async def get_user_by_email_str(self, email: str) -> UserResponse:
+        user = await self._get_user_by_email(email)
         if not user:
             raise NotFoundError(f"User with email {email} not found")
-
         return UserResponse.model_validate(user)
 
     async def list_users(
-        self,
-        skip: int = 0,
-        limit: int = 100,
-        active_only: bool = False,
+        self, skip: int = 0, limit: int = 100, active_only: bool = False
     ) -> UserListResponse:
-        """List users with pagination."""
-        users = await list_users(self.db, skip=skip, limit=limit, active_only=active_only)
-
+        query = select(User)
+        if active_only:
+            query = query.where(User.is_active == True)
+        query = query.offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        users = list(result.scalars().all())
         return UserListResponse(
             users=[UserResponse.model_validate(user) for user in users],
-            total=len(users),  # In production, you'd want a separate count query
+            total=len(users),
             skip=skip,
             limit=limit,
         )
 
     async def update_user(self, user_id: int, data: UserUpdate) -> UserResponse:
-        """Update user information."""
         try:
-            updated_user = await update_user(
-                db=self.db,
-                user_id=user_id,
-                email=data.email,
-                name=data.name,
-                avatar_url=data.avatar_url,
-                is_active=data.is_active,
-            )
-
-            if not updated_user:
+            user = await self._get_user_by_id(user_id)
+            if not user:
                 raise NotFoundError(f"User {user_id} not found")
 
-            return UserResponse.model_validate(updated_user)
+            if data.email is not None:
+                user.email = data.email
+            if data.name is not None:
+                user.name = data.name
+            if data.avatar_url is not None:
+                user.avatar_url = data.avatar_url
+            if data.is_active is not None:
+                user.is_active = data.is_active
+
+            await self.db.commit()
+            await self.db.refresh(user)
+            return UserResponse.model_validate(user)
         except IntegrityError as e:
             await self.db.rollback()
             if "email" in str(e):
                 raise ValidationError(f"User with email {data.email} already exists")
-            else:
-                raise ValidationError("Database integrity error")
+            raise ValidationError("Database integrity error")
 
     async def delete_user(self, user_id: int) -> None:
-        """Delete a user (hard delete)."""
-        deleted = await delete_user(self.db, user_id)
-
-        if not deleted:
-            raise NotFoundError(f"User {user_id} not found")
-
-    async def deactivate_user(self, user_id: int) -> UserResponse:
-        """Deactivate a user (soft delete)."""
-        user = await deactivate_user(self.db, user_id)
-
+        user = await self._get_user_by_id(user_id)
         if not user:
             raise NotFoundError(f"User {user_id} not found")
+        await self.db.delete(user)
+        await self.db.commit()
 
+    async def deactivate_user(self, user_id: int) -> UserResponse:
+        user = await self._get_user_by_id(user_id)
+        if not user:
+            raise NotFoundError(f"User {user_id} not found")
+        user.is_active = False
+        await self.db.commit()
+        await self.db.refresh(user)
         return UserResponse.model_validate(user)
-

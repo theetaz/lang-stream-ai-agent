@@ -1,27 +1,14 @@
-"""
-Authentication service layer.
-Contains all business logic for authentication operations.
-"""
+import hashlib
 import uuid
+from typing import Optional, List
 from fastapi import Request, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.jwt import create_access_token, create_refresh_token, verify_token
-from database.crud.user_crud import (
-    get_or_create_user_by_google,
-    get_user_by_email,
-    create_user,
-    get_user_by_id,
-)
-from database.crud.session_crud import (
-    create_session,
-    get_session_by_refresh_token,
-    get_user_sessions,
-    deactivate_session,
-    deactivate_all_user_sessions,
-    update_session_activity,
-)
-from common.utils import hash_password, verify_password, get_device_info
+from auth.utils import hash_password, verify_password, get_device_info
+from models.user import User
+from models.session import Session
 from schemas.auth import (
     GoogleAuthRequest,
     EmailPasswordRegisterRequest,
@@ -34,27 +21,141 @@ from schemas.auth import (
 
 
 class AuthService:
-    """Service for authentication operations."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_token_response(
+    def _hash_refresh_token(self, token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    async def _get_user_by_id(self, user_id: int) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        return result.scalars().first()
+
+    async def _get_user_by_email(self, email: str) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.email == email))
+        return result.scalars().first()
+
+    async def _get_user_by_google_id(self, google_id: str) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.google_id == google_id))
+        return result.scalars().first()
+
+    async def _create_user(
         self,
-        user,
-        request: Request,
-        existing_session_id: str | None = None,
+        email: str,
+        password_hash: Optional[str] = None,
+        google_id: Optional[str] = None,
+        name: Optional[str] = None,
+        avatar_url: Optional[str] = None,
+    ) -> User:
+        user = User(
+            email=email,
+            password_hash=password_hash,
+            google_id=google_id,
+            name=name,
+            avatar_url=avatar_url,
+            is_active=True,
+        )
+        self.db.add(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def _get_or_create_user_by_google(
+        self, google_id: str, email: str, name: Optional[str] = None, avatar_url: Optional[str] = None
+    ) -> tuple[User, bool]:
+        user = await self._get_user_by_google_id(google_id)
+        if user:
+            return user, False
+
+        user = await self._get_user_by_email(email)
+        if user:
+            user.google_id = google_id
+            if name and not user.name:
+                user.name = name
+            if avatar_url and not user.avatar_url:
+                user.avatar_url = avatar_url
+            await self.db.commit()
+            await self.db.refresh(user)
+            return user, False
+
+        user = await self._create_user(email=email, google_id=google_id, name=name, avatar_url=avatar_url)
+        return user, True
+
+    async def _get_session_by_id(self, session_id: str) -> Optional[Session]:
+        result = await self.db.execute(select(Session).where(Session.id == session_id))
+        return result.scalars().first()
+
+    async def _get_session_by_refresh_token(self, refresh_token: str) -> Optional[Session]:
+        refresh_token_hash = self._hash_refresh_token(refresh_token)
+        result = await self.db.execute(
+            select(Session).where(Session.refresh_token_hash == refresh_token_hash)
+        )
+        return result.scalars().first()
+
+    async def _create_session(
+        self,
+        session_id: str,
+        user_id: int,
+        refresh_token: str,
+        device_info: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> Session:
+        session = Session(
+            id=session_id,
+            user_id=user_id,
+            refresh_token_hash=self._hash_refresh_token(refresh_token),
+            device_info=device_info,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            is_active=True,
+        )
+        self.db.add(session)
+        await self.db.commit()
+        await self.db.refresh(session)
+        return session
+
+    async def _update_session_activity(self, session_id: str) -> Optional[Session]:
+        session = await self._get_session_by_id(session_id)
+        if not session:
+            return None
+        await self.db.commit()
+        await self.db.refresh(session)
+        return session
+
+    async def _deactivate_session(self, session_id: str) -> Optional[Session]:
+        session = await self._get_session_by_id(session_id)
+        if not session:
+            return None
+        session.is_active = False
+        await self.db.commit()
+        await self.db.refresh(session)
+        return session
+
+    async def _get_user_sessions(self, user_id: int, active_only: bool = True) -> List[Session]:
+        query = select(Session).where(Session.user_id == user_id)
+        if active_only:
+            query = query.where(Session.is_active == True)
+        query = query.order_by(Session.updated_at.desc())
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def _deactivate_all_user_sessions(self, user_id: int) -> int:
+        sessions = await self._get_user_sessions(user_id, active_only=True)
+        for session in sessions:
+            session.is_active = False
+        await self.db.commit()
+        return len(sessions)
+
+    async def create_token_response(
+        self, user, request: Request, existing_session_id: str | None = None
     ) -> dict:
-        """Create JWT tokens, create/update session, and format response"""
-        # Extract request info
         user_agent = request.headers.get("user-agent")
         ip_address = request.client.host if request.client else None
         device_info = get_device_info(user_agent)
         
-        # Use existing session ID if refreshing, otherwise create new
         session_id = existing_session_id or str(uuid.uuid4())
         
-        # Create tokens with session_id
         token_data = {
             "user_id": user.id,
             "email": user.email,
@@ -65,14 +166,10 @@ class AuthService:
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token({"user_id": user.id, "session_id": session_id})
         
-        # Create or update session
         if existing_session_id:
-            # Update existing session activity
-            await update_session_activity(self.db, existing_session_id)
+            await self._update_session_activity(existing_session_id)
         else:
-            # Create new session
-            await create_session(
-                db=self.db,
+            await self._create_session(
                 session_id=session_id,
                 user_id=user.id,
                 refresh_token=refresh_token,
@@ -90,55 +187,33 @@ class AuthService:
         }
 
     async def google_auth(self, auth_data: GoogleAuthRequest, request: Request) -> TokenResponse:
-        """Handle Google OAuth login/registration."""
         try:
-            # Get or create user
-            user, created = await get_or_create_user_by_google(
-                db=self.db,
+            user, created = await self._get_or_create_user_by_google(
                 google_id=auth_data.google_id,
                 email=auth_data.email,
                 name=auth_data.name,
                 avatar_url=auth_data.avatar_url,
             )
-
-            # Create and return JWT tokens with session
             result = await self.create_token_response(user, request)
             return TokenResponse(**result)
-
         except Exception as e:
-            print(f"Google auth error: {e}")
             raise HTTPException(status_code=500, detail="Authentication failed")
 
     async def register(self, data: EmailPasswordRegisterRequest, request: Request) -> TokenResponse:
-        """Register a new user with email and password."""
-        # Check if user already exists
-        existing_user = await get_user_by_email(self.db, data.email)
+        existing_user = await self._get_user_by_email(data.email)
         if existing_user:
             raise HTTPException(status_code=400, detail="Email already registered")
 
-        # Hash password
         hashed_password = hash_password(data.password)
-
-        # Create user
-        user = await create_user(
-            db=self.db,
-            email=data.email,
-            password_hash=hashed_password,
-            name=data.name,
-        )
-
+        user = await self._create_user(email=data.email, password_hash=hashed_password, name=data.name)
         result = await self.create_token_response(user, request)
         return TokenResponse(**result)
 
     async def login(self, data: EmailPasswordLoginRequest, request: Request) -> TokenResponse:
-        """Login with email and password."""
-        # Get user
-        user = await get_user_by_email(self.db, data.email)
-
+        user = await self._get_user_by_email(data.email)
         if not user:
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
-        # Verify password
         if not user.password_hash or not verify_password(data.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -149,10 +224,7 @@ class AuthService:
         return TokenResponse(**result)
 
     async def refresh_tokens(self, data: RefreshRequest, request: Request) -> TokenResponse:
-        """Refresh access token using refresh token."""
-        # Verify refresh token
         payload = verify_token(data.refresh_token, token_type="refresh")
-
         if not payload:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 
@@ -162,25 +234,19 @@ class AuthService:
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        # Check session validity
         if session_id:
-            session = await get_session_by_refresh_token(self.db, data.refresh_token)
+            session = await self._get_session_by_refresh_token(data.refresh_token)
             if not session or not session.is_active:
                 raise HTTPException(status_code=401, detail="Session expired or invalid")
 
-        # Get user
-        user = await get_user_by_id(self.db, user_id)
-
+        user = await self._get_user_by_id(user_id)
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="User not found or inactive")
 
-        # Create new tokens with same session_id
         result = await self.create_token_response(user, request, existing_session_id=session_id)
         return TokenResponse(**result)
 
     async def logout(self, request: Request) -> dict:
-        """Logout endpoint - deactivates current session."""
-        # Get session_id from token
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.replace("Bearer ", "")
@@ -188,36 +254,24 @@ class AuthService:
             if payload:
                 session_id = payload.get("session_id")
                 if session_id:
-                    await deactivate_session(self.db, session_id)
-        
+                    await self._deactivate_session(session_id)
         return {"message": "Logged out successfully"}
 
     async def get_sessions(self, user_id: int) -> SessionsListResponse:
-        """Get all sessions for a user."""
-        sessions = await get_user_sessions(self.db, user_id, active_only=False)
-        
+        sessions = await self._get_user_sessions(user_id, active_only=False)
         return SessionsListResponse(
             sessions=[SessionResponse(**session.to_dict()) for session in sessions]
         )
 
     async def delete_all_sessions(self, user_id: int) -> dict:
-        """Delete all sessions for a user."""
-        count = await deactivate_all_user_sessions(self.db, user_id)
+        count = await self._deactivate_all_user_sessions(user_id)
         return {"message": f"Logged out from {count} session(s)"}
 
     async def delete_session(self, session_id: str, user_id: int) -> dict:
-        """Delete a specific session by session_id."""
-        from database.crud.session_crud import get_session_by_id
-        
-        session = await get_session_by_id(self.db, session_id)
-        
+        session = await self._get_session_by_id(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
-        
         if session.user_id != user_id:
             raise HTTPException(status_code=403, detail="Cannot delete other user's session")
-        
-        await deactivate_session(self.db, session_id)
-        
+        await self._deactivate_session(session_id)
         return {"message": "Session deleted successfully"}
-
