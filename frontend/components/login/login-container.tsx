@@ -22,7 +22,8 @@ export function LoginContainer() {
       }
     },
     onSuccess: () => {
-      router.push("/");
+      // Use window.location for full page reload to ensure cookies are available server-side
+      window.location.href = "/";
     },
   });
 

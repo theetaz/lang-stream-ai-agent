@@ -70,13 +70,29 @@ export async function registerWithEmailPassword(
       throw new Error(errorData.detail || `Registration failed: ${response.status}`);
     }
 
-    const data = await response.json();
+    const apiResponse = await response.json();
     console.log("Registration successful, storing tokens...");
 
-    // Store tokens in localStorage
+    if (!apiResponse.success || !apiResponse.data) {
+      throw new Error(apiResponse.message || "Registration failed");
+    }
+
+    const data = apiResponse.data;
+
+    // Store tokens in both localStorage and cookies for SSR compatibility
     localStorage.setItem("backend_access_token", data.access_token);
     localStorage.setItem("backend_refresh_token", data.refresh_token);
     localStorage.setItem("backend_user", JSON.stringify(data.user));
+    if (data.session_id) {
+      localStorage.setItem("backend_session_id", data.session_id);
+    }
+
+    // Set cookies for server-side access
+    document.cookie = `backend_access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `backend_refresh_token=${data.refresh_token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+    if (data.session_id) {
+      document.cookie = `backend_session_id=${data.session_id}; path=/; max-age=86400; SameSite=Lax`;
+    }
 
     return data;
   } catch (error) {
@@ -106,13 +122,29 @@ export async function loginWithEmailPassword(email: string, password: string) {
       throw new Error(errorData.detail || `Login failed: ${response.status}`);
     }
 
-    const data = await response.json();
+    const apiResponse = await response.json();
     console.log("Login successful, storing tokens...");
 
-    // Store tokens in localStorage
+    if (!apiResponse.success || !apiResponse.data) {
+      throw new Error(apiResponse.message || "Login failed");
+    }
+
+    const data = apiResponse.data;
+
+    // Store tokens in both localStorage and cookies for SSR compatibility
     localStorage.setItem("backend_access_token", data.access_token);
     localStorage.setItem("backend_refresh_token", data.refresh_token);
     localStorage.setItem("backend_user", JSON.stringify(data.user));
+    if (data.session_id) {
+      localStorage.setItem("backend_session_id", data.session_id);
+    }
+
+    // Set cookies for server-side access
+    document.cookie = `backend_access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `backend_refresh_token=${data.refresh_token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+    if (data.session_id) {
+      document.cookie = `backend_session_id=${data.session_id}; path=/; max-age=86400; SameSite=Lax`;
+    }
 
     return data;
   } catch (error) {
@@ -241,11 +273,15 @@ export async function deleteAllSessions() {
     const currentSessionId = getCurrentSessionId();
     const data = await response.json();
     
-    // If we deleted all sessions, clear local storage
+    // If we deleted all sessions, clear local storage and cookies
     localStorage.removeItem("backend_access_token");
     localStorage.removeItem("backend_refresh_token");
     localStorage.removeItem("backend_user");
     localStorage.removeItem("backend_session_id");
+    
+    document.cookie = "backend_access_token=; path=/; max-age=0";
+    document.cookie = "backend_refresh_token=; path=/; max-age=0";
+    document.cookie = "backend_session_id=; path=/; max-age=0";
 
     return data;
   } catch (error) {
@@ -284,15 +320,29 @@ export async function exchangeForBackendJWT(betterAuthSession: any) {
       throw new Error(`Backend authentication failed: ${response.status}`);
     }
 
-    const data = await response.json();
+    const apiResponse = await response.json();
+    console.log("Received backend response:", apiResponse);
+
+    if (!apiResponse.success || !apiResponse.data) {
+      throw new Error(apiResponse.message || "Backend authentication failed");
+    }
+
+    const data = apiResponse.data;
     console.log("Received JWT tokens from backend");
 
-    // Store tokens in localStorage for API calls
+    // Store tokens in both localStorage and cookies for SSR compatibility
     localStorage.setItem("backend_access_token", data.access_token);
     localStorage.setItem("backend_refresh_token", data.refresh_token);
     localStorage.setItem("backend_user", JSON.stringify(data.user));
     if (data.session_id) {
       localStorage.setItem("backend_session_id", data.session_id);
+    }
+
+    // Set cookies for server-side access
+    document.cookie = `backend_access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `backend_refresh_token=${data.refresh_token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+    if (data.session_id) {
+      document.cookie = `backend_session_id=${data.session_id}; path=/; max-age=86400; SameSite=Lax`;
     }
 
     return data;
@@ -344,12 +394,22 @@ export async function refreshBackendToken(): Promise<boolean> {
       return false;
     }
 
-    const data = await response.json();
+    const apiResponse = await response.json();
+    
+    if (!apiResponse.success || !apiResponse.data) {
+      console.error("Token refresh failed:", apiResponse.message);
+      return false;
+    }
+
+    const data = apiResponse.data;
     console.log("Access token refreshed successfully");
 
-    // Update tokens
+    // Update tokens in both localStorage and cookies
     localStorage.setItem("backend_access_token", data.access_token);
     localStorage.setItem("backend_refresh_token", data.refresh_token);
+    
+    document.cookie = `backend_access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `backend_refresh_token=${data.refresh_token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
 
     return true;
   } catch (error) {
@@ -376,11 +436,16 @@ export async function signOut() {
       });
     }
 
-    // Clear backend tokens
+    // Clear backend tokens from localStorage
     localStorage.removeItem("backend_access_token");
     localStorage.removeItem("backend_refresh_token");
     localStorage.removeItem("backend_user");
     localStorage.removeItem("backend_session_id");
+
+    // Clear cookies
+    document.cookie = "backend_access_token=; path=/; max-age=0";
+    document.cookie = "backend_refresh_token=; path=/; max-age=0";
+    document.cookie = "backend_session_id=; path=/; max-age=0";
 
     // Sign out from Better Auth
     await authClient.signOut();
