@@ -1,23 +1,70 @@
-"""
-Application configuration settings.
-"""
-import os
-from dotenv import load_dotenv
+from functools import lru_cache
+from typing import List
 
-load_dotenv()
+from pydantic_settings import BaseSettings
 
 
-def get_settings():
-    """Get application settings."""
-    return {
-        "postgres_user": os.getenv("POSTGRES_USER", "postgres"),
-        "postgres_password": os.getenv("POSTGRES_PASSWORD", ""),
-        "postgres_host": os.getenv("POSTGRES_HOST", "localhost"),
-        "postgres_port": os.getenv("POSTGRES_PORT", "5432"),
-        "postgres_db": os.getenv("POSTGRES_DB", "lang_ai_agent"),
-        "jwt_secret": os.getenv("JWT_SECRET", os.getenv("BETTER_AUTH_SECRET", "your-secret-key-change-in-production")),
-        "access_token_expire_minutes": int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")),
-        "refresh_token_expire_days": int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")),
-        "cors_origins": os.getenv("CORS_ORIGINS", "http://localhost:3000,http://frontend:3000").split(","),
-    }
+class Settings(BaseSettings):
+    """Application settings with Pydantic validation."""
 
+    # Database settings
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = ""
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: str = "5433"
+    POSTGRES_DB: str = "lang_ai_agent"
+
+    # Redis settings
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+
+    # OpenAI Configuration
+    OPENAI_API_KEY: str = ""
+
+    # Tavily API for web search
+    TAVILY_API_KEY: str = ""
+
+    # Google OAuth Configuration
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+
+    # JWT settings
+    JWT_SECRET: str = "your-secret-key-change-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # CORS settings
+    CORS_ORIGINS: str = "http://localhost:3000,http://frontend:3000"
+
+    # General settings
+    ENVIRONMENT: str = "development"
+    ALGORITHM: str = "HS256"
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse CORS origins string into a list."""
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+
+    @property
+    def database_url(self) -> str:
+        """Construct sync database URL from components."""
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+
+    @property
+    def async_database_url(self) -> str:
+        """Construct async database URL from components."""
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+        extra = "ignore"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached application settings instance."""
+    return Settings()
+
+
+settings = get_settings()

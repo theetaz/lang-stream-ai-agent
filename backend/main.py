@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database.async_connection import init_db, close_db
+from database.db_client import init_db, close_db
 from api.v1.auth.routes import router as auth_router
 from api.v1.user.routes import router as user_router
 from api.v1.chat.routes import router as chat_router
@@ -37,7 +37,7 @@ app = FastAPI(title="AI Agent API", version="1.0", lifespan=lifespan)
 settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings["cors_origins"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -5,7 +5,7 @@ Only HTTP handling and service calls. No business logic.
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.async_connection import get_async_db
+from database.db_client import get_db
 from api.v1.user.service import UserService
 from schemas.user import (
     UserCreate,
@@ -18,7 +18,7 @@ from schemas.user import (
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-def get_user_service(db: AsyncSession = Depends(get_async_db)) -> UserService:
+def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
     """Dependency to get UserService instance."""
     return UserService(db)
 

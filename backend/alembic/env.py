@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 # Import database configuration and models
-from database.async_connection import DATABASE_URL
+from config.settings import settings
 from models.base import Base
 
 # Import all models to ensure they're registered with Base
@@ -23,8 +23,8 @@ from models.session import Session
 # access to the values within the .ini file in use.
 config = context.config
 
-# Override the sqlalchemy.url with our async database URL from environment
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+# Override the sqlalchemy.url with our async database URL from settings
+config.set_main_option("sqlalchemy.url", settings.async_database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
