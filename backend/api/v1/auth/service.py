@@ -4,7 +4,8 @@ from typing import List, Optional
 
 from auth.jwt import create_access_token, create_refresh_token, verify_token
 from auth.utils import get_device_info, hash_password, verify_password
-from fastapi import HTTPException, Request, status
+from common.errors import ValidationError, UnauthorizedError
+from fastapi import Request
 from models.session import Session
 from models.user import User
 from schemas.auth import (
@@ -201,30 +202,21 @@ class AuthService:
     async def google_auth(
         self, auth_data: GoogleAuthRequest, request: Request
     ) -> TokenResponse:
-        try:
-            user, created = await self._get_or_create_user_by_google(
-                google_id=auth_data.google_id,
-                email=auth_data.email,
-                name=auth_data.name,
-                avatar_url=auth_data.avatar_url,
-            )
-            result = await self.create_token_response(user, request)
-            return TokenResponse(**result)
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Authentication failed",
-            )
+        user, created = await self._get_or_create_user_by_google(
+            google_id=auth_data.google_id,
+            email=auth_data.email,
+            name=auth_data.name,
+            avatar_url=auth_data.avatar_url,
+        )
+        result = await self.create_token_response(user, request)
+        return TokenResponse(**result)
 
     async def register(
         self, data: EmailPasswordRegisterRequest, request: Request
     ) -> TokenResponse:
         existing_user = await self._get_user_by_email(data.email)
         if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered",
-            )
+            raise ValidationError("Email already registered")
 
         hashed_password = hash_password(data.password)
         user = await self._create_user(
@@ -238,23 +230,15 @@ class AuthService:
     ) -> TokenResponse:
         user = await self._get_user_by_email(data.email)
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password",
-            )
+            raise UnauthorizedError("Invalid email or password")
 
         if not user.password_hash or not verify_password(
             data.password, user.password_hash
         ):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password",
-            )
+            raise UnauthorizedError("Invalid email or password")
 
         if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is inactive"
-            )
+            raise UnauthorizedError("Account is inactive")
 
         result = await self.create_token_response(user, request)
         return TokenResponse(**result)
@@ -264,32 +248,22 @@ class AuthService:
     ) -> TokenResponse:
         payload = verify_token(data.refresh_token, token_type="refresh")
         if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-            )
+            raise UnauthorizedError("Invalid refresh token")
 
         user_id = payload.get("user_id")
         session_id = payload.get("session_id")
 
         if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
-            )
+            raise UnauthorizedError("Invalid token payload")
 
         if session_id:
             session = await self._get_session_by_refresh_token(data.refresh_token)
             if not session or not session.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Session expired or invalid",
-                )
+                raise UnauthorizedError("Session expired or invalid")
 
         user = await self._get_user_by_id(user_id)
         if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive",
-            )
+            raise UnauthorizedError("User not found or inactive")
 
         result = await self.create_token_response(
             user, request, existing_session_id=session_id
@@ -318,15 +292,12 @@ class AuthService:
         return {"message": f"Logged out from {count} session(s)"}
 
     async def delete_session(self, session_id: str, user_id: int) -> dict:
+        from common.errors import NotFoundError, ForbiddenError
+        
         session = await self._get_session_by_id(session_id)
         if not session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
-            )
+            raise NotFoundError("Session not found")
         if session.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot delete other user's session",
-            )
+            raise ForbiddenError("Cannot delete other user's session")
         await self._deactivate_session(session_id)
         return {"message": "Session deleted successfully"}
