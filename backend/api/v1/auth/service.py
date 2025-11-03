@@ -1,23 +1,23 @@
 import hashlib
 import uuid
-from typing import Optional, List
-from fastapi import Request, HTTPException
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List, Optional
 
 from auth.jwt import create_access_token, create_refresh_token, verify_token
-from auth.utils import hash_password, verify_password, get_device_info
-from models.user import User
+from auth.utils import get_device_info, hash_password, verify_password
+from fastapi import HTTPException, Request, status
 from models.session import Session
+from models.user import User
 from schemas.auth import (
-    GoogleAuthRequest,
-    EmailPasswordRegisterRequest,
     EmailPasswordLoginRequest,
-    TokenResponse,
+    EmailPasswordRegisterRequest,
+    GoogleAuthRequest,
     RefreshRequest,
     SessionResponse,
     SessionsListResponse,
+    TokenResponse,
 )
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class AuthService:
@@ -61,7 +61,11 @@ class AuthService:
         return user
 
     async def _get_or_create_user_by_google(
-        self, google_id: str, email: str, name: Optional[str] = None, avatar_url: Optional[str] = None
+        self,
+        google_id: str,
+        email: str,
+        name: Optional[str] = None,
+        avatar_url: Optional[str] = None,
     ) -> tuple[User, bool]:
         user = await self._get_user_by_google_id(google_id)
         if user:
@@ -78,14 +82,18 @@ class AuthService:
             await self.db.refresh(user)
             return user, False
 
-        user = await self._create_user(email=email, google_id=google_id, name=name, avatar_url=avatar_url)
+        user = await self._create_user(
+            email=email, google_id=google_id, name=name, avatar_url=avatar_url
+        )
         return user, True
 
     async def _get_session_by_id(self, session_id: str) -> Optional[Session]:
         result = await self.db.execute(select(Session).where(Session.id == session_id))
         return result.scalars().first()
 
-    async def _get_session_by_refresh_token(self, refresh_token: str) -> Optional[Session]:
+    async def _get_session_by_refresh_token(
+        self, refresh_token: str
+    ) -> Optional[Session]:
         refresh_token_hash = self._hash_refresh_token(refresh_token)
         result = await self.db.execute(
             select(Session).where(Session.refresh_token_hash == refresh_token_hash)
@@ -132,7 +140,9 @@ class AuthService:
         await self.db.refresh(session)
         return session
 
-    async def _get_user_sessions(self, user_id: int, active_only: bool = True) -> List[Session]:
+    async def _get_user_sessions(
+        self, user_id: int, active_only: bool = True
+    ) -> List[Session]:
         query = select(Session).where(Session.user_id == user_id)
         if active_only:
             query = query.where(Session.is_active == True)
@@ -153,9 +163,9 @@ class AuthService:
         user_agent = request.headers.get("user-agent")
         ip_address = request.client.host if request.client else None
         device_info = get_device_info(user_agent)
-        
+
         session_id = existing_session_id or str(uuid.uuid4())
-        
+
         token_data = {
             "user_id": user.id,
             "email": user.email,
@@ -164,8 +174,10 @@ class AuthService:
         }
 
         access_token = create_access_token(token_data)
-        refresh_token = create_refresh_token({"user_id": user.id, "session_id": session_id})
-        
+        refresh_token = create_refresh_token(
+            {"user_id": user.id, "session_id": session_id}
+        )
+
         if existing_session_id:
             await self._update_session_activity(existing_session_id)
         else:
@@ -186,7 +198,9 @@ class AuthService:
             "session_id": session_id,
         }
 
-    async def google_auth(self, auth_data: GoogleAuthRequest, request: Request) -> TokenResponse:
+    async def google_auth(
+        self, auth_data: GoogleAuthRequest, request: Request
+    ) -> TokenResponse:
         try:
             user, created = await self._get_or_create_user_by_google(
                 google_id=auth_data.google_id,
@@ -197,53 +211,89 @@ class AuthService:
             result = await self.create_token_response(user, request)
             return TokenResponse(**result)
         except Exception as e:
-            raise HTTPException(status_code=500, detail="Authentication failed")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Authentication failed",
+            )
 
-    async def register(self, data: EmailPasswordRegisterRequest, request: Request) -> TokenResponse:
+    async def register(
+        self, data: EmailPasswordRegisterRequest, request: Request
+    ) -> TokenResponse:
         existing_user = await self._get_user_by_email(data.email)
         if existing_user:
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
 
         hashed_password = hash_password(data.password)
-        user = await self._create_user(email=data.email, password_hash=hashed_password, name=data.name)
+        user = await self._create_user(
+            email=data.email, password_hash=hashed_password, name=data.name
+        )
         result = await self.create_token_response(user, request)
         return TokenResponse(**result)
 
-    async def login(self, data: EmailPasswordLoginRequest, request: Request) -> TokenResponse:
+    async def login(
+        self, data: EmailPasswordLoginRequest, request: Request
+    ) -> TokenResponse:
         user = await self._get_user_by_email(data.email)
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
 
-        if not user.password_hash or not verify_password(data.password, user.password_hash):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not user.password_hash or not verify_password(
+            data.password, user.password_hash
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
 
         if not user.is_active:
-            raise HTTPException(status_code=401, detail="Account is inactive")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is inactive"
+            )
 
         result = await self.create_token_response(user, request)
         return TokenResponse(**result)
 
-    async def refresh_tokens(self, data: RefreshRequest, request: Request) -> TokenResponse:
+    async def refresh_tokens(
+        self, data: RefreshRequest, request: Request
+    ) -> TokenResponse:
         payload = verify_token(data.refresh_token, token_type="refresh")
         if not payload:
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+            )
 
         user_id = payload.get("user_id")
         session_id = payload.get("session_id")
-        
+
         if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token payload")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
+            )
 
         if session_id:
             session = await self._get_session_by_refresh_token(data.refresh_token)
             if not session or not session.is_active:
-                raise HTTPException(status_code=401, detail="Session expired or invalid")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session expired or invalid",
+                )
 
         user = await self._get_user_by_id(user_id)
         if not user or not user.is_active:
-            raise HTTPException(status_code=401, detail="User not found or inactive")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive",
+            )
 
-        result = await self.create_token_response(user, request, existing_session_id=session_id)
+        result = await self.create_token_response(
+            user, request, existing_session_id=session_id
+        )
         return TokenResponse(**result)
 
     async def logout(self, request: Request) -> dict:
@@ -270,8 +320,13 @@ class AuthService:
     async def delete_session(self, session_id: str, user_id: int) -> dict:
         session = await self._get_session_by_id(session_id)
         if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
+            )
         if session.user_id != user_id:
-            raise HTTPException(status_code=403, detail="Cannot delete other user's session")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot delete other user's session",
+            )
         await self._deactivate_session(session_id)
         return {"message": "Session deleted successfully"}
