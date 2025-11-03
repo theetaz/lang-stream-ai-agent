@@ -1,6 +1,13 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-export async function fetchAPI(endpoint: string, options?: RequestInit) {
+export interface APIResponse<T> {
+  success: boolean;
+  message: string;
+  data: T | null;
+  metadata?: Record<string, any> | null;
+}
+
+export async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<APIResponse<T>> {
   const url = `${API_URL}${endpoint}`;
 
   const response = await fetch(url, {
@@ -11,11 +18,13 @@ export async function fetchAPI(endpoint: string, options?: RequestInit) {
     },
   });
 
+  const data = await response.json();
+
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.statusText}`);
+    throw new Error(data.message || `API request failed: ${response.statusText}`);
   }
 
-  return response.json();
+  return data;
 }
 
 export interface ChatMessage {
@@ -27,11 +36,8 @@ export interface ChatResponse {
 }
 
 export const api = {
-  // Health check
   health: () => fetchAPI('/'),
-
-  // Chat endpoint
-  chat: async (message: string): Promise<ChatResponse> => {
+  chat: async (message: string): Promise<APIResponse<ChatResponse>> => {
     return fetchAPI('/api/v1/chat', {
       method: 'POST',
       body: JSON.stringify({ input: message }),
