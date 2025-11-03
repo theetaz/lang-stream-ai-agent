@@ -4,7 +4,7 @@ export interface APIResponse<T> {
   success: boolean;
   message: string;
   data: T | null;
-  metadata?: Record<string, any> | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export async function fetchAPI<T>(
