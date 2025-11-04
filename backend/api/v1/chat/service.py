@@ -1,27 +1,52 @@
 import asyncio
 import json
-from typing import AsyncIterator
+from typing import AsyncIterator, Optional
+from uuid import UUID
 
 from agents.langgraph_agent import get_graph, stream_graph
 from schemas.chat import ChatRequest, ChatResponse
+from database.checkpoint_pool import checkpointer
+from api.v1.chat.message_service import message_service
+from api.v1.chat.session_service import session_service
+from models.chat_message import MessageRole
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class ChatService:
     """Service for chat operations."""
 
-    async def event_stream(self, user_input: str) -> AsyncIterator[str]:
+    async def event_stream(
+        self, 
+        user_input: str,
+        session_id: Optional[UUID] = None,
+        user_id: Optional[int] = None,
+        db: Optional[AsyncSession] = None
+    ) -> AsyncIterator[str]:
         """
         Generate Server-Sent Events stream for chat responses.
         Streams tokens and tool call events in real-time.
         """
         try:
+            # Save user message to database if session_id provided
+            if session_id and db:
+                await message_service.save_message(
+                    db, session_id, MessageRole.USER, user_input
+                )
+                await session_service.update_last_message_at(db, session_id)
+            
             # Send initial connection confirmation
             yield f": connected\n\n"
 
             token_count = 0
             has_content = False
+            assistant_response = ""
 
-            async for event in stream_graph(user_input):
+            async for event in stream_graph(
+                user_input,
+                session_id=session_id,
+                user_id=user_id,
+                checkpointer=checkpointer if session_id else None
+            ):
                 event_type = event.get("type")
                 event_data = event.get("data", {})
 
@@ -29,10 +54,12 @@ class ChatService:
                 if event_type == "token":
                     # Regular token from LLM
                     has_content = True
+                    content = event_data.get("content", "")
+                    assistant_response += content
                     data = json.dumps(
                         {
                             "type": "content",
-                            "content": event_data.get("content", ""),
+                            "content": content,
                             "token": token_count,
                         }
                     )
@@ -91,6 +118,13 @@ class ChatService:
                 )
                 yield f"data: {data}\n\n"
 
+            # Save assistant response to database if session_id provided
+            if session_id and db and assistant_response:
+                await message_service.save_message(
+                    db, session_id, MessageRole.ASSISTANT, assistant_response
+                )
+                await session_service.update_last_message_at(db, session_id)
+            
             # Send completion event
             yield f"data: {json.dumps({'type': 'done', 'total_tokens': token_count})}\n\n"
 
