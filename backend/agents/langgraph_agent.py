@@ -1,10 +1,12 @@
-from typing import AsyncIterator, Literal
+from typing import AsyncIterator, Literal, Optional
+from uuid import UUID
 
 from config.settings import settings
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
 def get_llm():
@@ -98,7 +100,7 @@ def call_model(state: MessagesState):
     return {"messages": [response]}
 
 
-def get_graph() -> StateGraph:
+def get_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
     """
     Create and compile the LangGraph with tool calling support.
 
@@ -127,10 +129,15 @@ def get_graph() -> StateGraph:
     # After tools, always go back to call_model
     graph.add_edge("tools", "call_model")
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
-async def stream_graph(user_input: str) -> AsyncIterator[dict]:
+async def stream_graph(
+    user_input: str,
+    session_id: Optional[UUID] = None,
+    user_id: Optional[int] = None,
+    checkpointer: Optional[BaseCheckpointSaver] = None
+) -> AsyncIterator[dict]:
     """
     Stream the graph response with tool calls and tokens.
     Yields events as dictionaries with type and data.
@@ -139,10 +146,20 @@ async def stream_graph(user_input: str) -> AsyncIterator[dict]:
 
     logger = logging.getLogger(__name__)
 
-    graph = get_graph()
+    graph = get_graph(checkpointer=checkpointer)
 
     # Create input with proper message format
     input_data = {"messages": [HumanMessage(content=user_input)]}
+    
+    # Create config with thread_id for checkpointing
+    config = {}
+    if session_id and checkpointer:
+        config = {
+            "configurable": {
+                "thread_id": str(session_id),
+                "user_id": str(user_id) if user_id else None
+            }
+        }
 
     current_node = None
     tool_call_active = False
@@ -150,7 +167,7 @@ async def stream_graph(user_input: str) -> AsyncIterator[dict]:
 
     try:
         # Stream events from the graph
-        async for event in graph.astream_events(input_data, version="v2"):
+        async for event in graph.astream_events(input_data, config=config if config else None, version="v2"):
             event_count += 1
             kind = event.get("event")
             name = event.get("name", "")
