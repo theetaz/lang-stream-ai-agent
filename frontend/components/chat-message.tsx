@@ -1,12 +1,15 @@
 import { cn } from "@/lib/utils"
 import { Bot, User } from "lucide-react"
 import { ToolCall, type ToolCallData } from "@/components/tool-call"
+import { MessageAttachment } from "@/components/message-attachment"
+import type { UploadedFile } from "@/lib/types/file"
 
 export interface Message {
   id: string
   role: "user" | "assistant"
   content: string
   toolCalls?: ToolCallData[]
+  attachments?: UploadedFile[]
   timestamp?: Date
 }
 
@@ -39,6 +42,20 @@ export function ChatMessage({ message }: ChatMessageProps) {
         <p className="text-sm font-semibold">
           {isUser ? "You" : "AI Assistant"}
         </p>
+
+        {/* File Attachments */}
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {message.attachments.map((file) => (
+              <MessageAttachment
+                key={file.id}
+                filename={file.filename}
+                fileSize={file.file_size}
+                processingStatus={file.processing_status}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Tool Calls */}
         {message.toolCalls && message.toolCalls.length > 0 && (

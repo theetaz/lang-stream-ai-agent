@@ -17,3 +17,4 @@ export default async function HomePage() {
 
   return <ChatContainer user={user} />;
 }
+

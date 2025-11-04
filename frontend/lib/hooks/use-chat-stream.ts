@@ -29,7 +29,7 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
   const currentMessageRef = useRef<string>("")
 
   const streamMessage = useCallback(
-    async (input: string) => {
+    async (input: string, sessionId?: string | null) => {
       setIsStreaming(true)
       setError(null)
       currentMessageRef.current = ""
@@ -40,7 +40,11 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
       try {
         const authHeaders = await getAuthHeaders();
         
-        const response = await fetch(`${API_URL}/api/v1/chat/stream`, {
+        const url = sessionId 
+          ? `${API_URL}/api/v1/chat/stream?session_id=${sessionId}`
+          : `${API_URL}/api/v1/chat/stream`;
+        
+        const response = await fetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

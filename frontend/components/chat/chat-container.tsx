@@ -1,17 +1,18 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage, type Message } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
-import { FileList } from "@/components/file-list";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChatStream, type StreamEvent } from "@/lib/hooks/use-chat-stream";
 import { type ToolCallData } from "@/components/tool-call";
 import { ChatHeader } from "./chat-header";
 import { ChatEmptyState } from "./chat-empty-state";
 import { StreamingMessage } from "./streaming-message";
-import { uploadFile, getFiles, deleteFile } from "@/lib/api/files";
+import { SessionSidebar } from "./session-sidebar";
+import { uploadFile } from "@/lib/api/files";
+import { createSession, getSessionMessages } from "@/lib/api/sessions";
 import { useToast } from "@/hooks/use-toast";
 import type { UploadedFile } from "@/lib/types/file";
 
@@ -21,58 +22,64 @@ interface ChatContainerProps {
     email?: string;
     image?: string;
   };
-  sessionId?: string;
 }
 
-export function ChatContainer({ user, sessionId }: ChatContainerProps) {
+export function ChatContainer({ user }: ChatContainerProps) {
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingToolCalls, setStreamingToolCalls] = useState<ToolCallData[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: filesData, refetch: refetchFiles } = useQuery({
-    queryKey: ["files", sessionId],
-    queryFn: () => getFiles(sessionId),
-    refetchInterval: 5000, // Refetch every 5 seconds to update processing status
-  });
+  // Load message history when session changes
+  useEffect(() => {
+    if (currentSessionId) {
+      loadSessionHistory(currentSessionId);
+    } else {
+      setMessages([]);
+    }
+  }, [currentSessionId]);
 
-  const files = filesData?.data || [];
+  const loadSessionHistory = async (sessionId: string) => {
+    setIsLoadingHistory(true);
+    try {
+      const response = await getSessionMessages(sessionId);
+      if (response.data) {
+        const historyMessages: Message[] = response.data.map((msg) => ({
+          id: msg.id,
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+        }));
+        setMessages(historyMessages);
+      }
+    } catch (error) {
+      console.error("Failed to load session history:", error);
+      toast({
+        title: "Failed to load history",
+        description: "Could not load conversation history",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadFile(file, sessionId),
-    onSuccess: (data) => {
-      refetchFiles();
-      toast({
-        title: "File uploaded",
-        description: `${data.data?.filename} is being processed`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Upload failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    mutationFn: ({ file, sessionId }: { file: File; sessionId?: string }) =>
+      uploadFile(file, sessionId),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (fileId: string) => deleteFile(fileId),
-    onSuccess: () => {
-      refetchFiles();
-      toast({
-        title: "File deleted",
-        description: "File removed successfully",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Delete failed",
-        description: error.message,
-        variant: "destructive",
-      });
+  const createSessionMutation = useMutation({
+    mutationFn: () => createSession("New Chat"),
+    onSuccess: (data) => {
+      if (data.data) {
+        setCurrentSessionId(data.data.id);
+        queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      }
     },
   });
 
@@ -132,6 +139,8 @@ export function ChatContainer({ user, sessionId }: ChatContainerProps) {
       setMessages((prev) => [...prev, assistantMessage]);
       setStreamingMessage("");
       setStreamingToolCalls([]);
+      
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
     onError: (error) => {
       const errorMessage: Message = {
@@ -158,65 +167,118 @@ export function ChatContainer({ user, sessionId }: ChatContainerProps) {
     }
   }, [messages, streamingMessage, streamingToolCalls]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, files?: File[]) => {
+    // Create session if this is the first message
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      const response = await createSessionMutation.mutateAsync();
+      if (!response.data) {
+        toast({
+          title: "Error",
+          description: "Failed to create chat session",
+          variant: "destructive",
+        });
+        return;
+      }
+      sessionId = response.data.id;
+    }
+
+    // Upload files first if any
+    const uploadedFiles: UploadedFile[] = [];
+    if (files && files.length > 0) {
+      try {
+        for (const file of files) {
+          const result = await uploadMutation.mutateAsync({
+            file,
+            sessionId: sessionId || undefined,
+          });
+          if (result.data) {
+            uploadedFiles.push(result.data);
+          }
+        }
+      } catch (error) {
+        toast({
+          title: "Upload failed",
+          description: "Failed to upload files",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Create user message with attachments
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content,
+      attachments: uploadedFiles.length > 0 ? uploadedFiles : undefined,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    await streamMessage(content);
+    
+    // Send to AI
+    setTimeout(async () => {
+      await streamMessage(content, sessionId);
+    }, 100);
   };
 
-  const handleFileSelect = (file: File) => {
-    uploadMutation.mutate(file);
+  const handleNewSession = () => {
+    setCurrentSessionId(null);
+    setMessages([]);
   };
 
-  const handleFileDelete = (fileId: string) => {
-    deleteMutation.mutate(fileId);
+  const handleSessionSelect = (sessionId: string | null) => {
+    setCurrentSessionId(sessionId);
   };
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      <ChatHeader user={user} />
+    <div className="flex h-screen bg-background">
+      <SessionSidebar
+        currentSessionId={currentSessionId}
+        onSessionSelect={handleSessionSelect}
+        onNewSession={handleNewSession}
+      />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        {messages.length === 0 ? (
-          <ChatEmptyState />
-        ) : (
-          <ScrollArea ref={scrollAreaRef} className="flex-1">
-            <div className="mx-auto max-w-3xl">
-              {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
-              ))}
-              {(isStreaming || streamingMessage || streamingToolCalls.length > 0) && (
-                <StreamingMessage
-                  message={streamingMessage}
-                  toolCalls={streamingToolCalls}
-                  isStreaming={isStreaming}
-                />
-              )}
-            </div>
-          </ScrollArea>
-        )}
+        <ChatHeader user={user} />
 
-        <div className="border-t bg-background">
-          <div className="mx-auto max-w-3xl p-4 space-y-3">
-            {files.length > 0 && (
-              <FileList files={files} onDelete={handleFileDelete} />
-            )}
-            <ChatInput
-              onSend={handleSendMessage}
-              onFileSelect={handleFileSelect}
-              disabled={isStreaming}
-              isUploading={uploadMutation.isPending}
-              placeholder="Ask anything..."
-            />
-            <p className="text-center text-xs text-muted-foreground">
-              LangGraph AI can make mistakes. Check important info.
-            </p>
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {isLoadingHistory ? (
+            <div className="flex flex-1 items-center justify-center">
+              <div className="text-muted-foreground">Loading conversation...</div>
+            </div>
+          ) : messages.length === 0 ? (
+            <ChatEmptyState />
+          ) : (
+            <ScrollArea ref={scrollAreaRef} className="flex-1">
+              <div className="mx-auto max-w-3xl">
+                {messages.map((message) => (
+                  <ChatMessage key={message.id} message={message} />
+                ))}
+                {(isStreaming || streamingMessage || streamingToolCalls.length > 0) && (
+                  <StreamingMessage
+                    message={streamingMessage}
+                    toolCalls={streamingToolCalls}
+                    isStreaming={isStreaming}
+                  />
+                )}
+              </div>
+            </ScrollArea>
+          )}
+
+          <div className="border-t bg-background">
+            <div className="mx-auto max-w-3xl p-4">
+              <ChatInput
+                onSend={handleSendMessage}
+                disabled={isStreaming}
+                isUploading={uploadMutation.isPending}
+                placeholder="Ask anything..."
+              />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                LangGraph AI can make mistakes. Check important info.
+              </p>
+            </div>
           </div>
         </div>
       </div>
