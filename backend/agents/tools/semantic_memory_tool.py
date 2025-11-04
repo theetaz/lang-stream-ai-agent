@@ -1,6 +1,6 @@
 from langchain_core.tools import tool
 from typing import Literal, Optional
-from services.memory_service import memory_service
+from api.v1.chat.memory_service import memory_service
 from common.logger import get_logger
 
 logger = get_logger(__name__)

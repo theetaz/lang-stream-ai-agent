@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import StreamingResponse
 from models.user import User
 from schemas.file import UploadedFileResponse
-from services.file_service import file_service
+from api.v1.files.service import file_service
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -26,7 +26,7 @@ async def upload_file(
         db, current_user.id, file, session_id
     )
 
-    from services.document_processor import document_processor
+    from api.v1.chat.document_processor import document_processor
 
     asyncio.create_task(document_processor.process_file(uploaded_file.id))
 

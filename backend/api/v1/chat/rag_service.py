@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models.file_chunk import FileChunk
 from models.uploaded_file import UploadedFile, ProcessingStatus
-from services.embedding_service import embedding_service
+from common.embedding_service import embedding_service
 from common.logger import get_logger
 
 logger = get_logger(__name__)

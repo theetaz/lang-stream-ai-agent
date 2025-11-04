@@ -1,11 +1,7 @@
 from typing import Literal, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-from sqlalchemy.dialects.postgresql import insert
-from models.chat_session import ChatSession
-from services.embedding_service import embedding_service
+from common.embedding_service import embedding_service
 from common.logger import get_logger
-from uuid import uuid4
 from datetime import datetime
 
 logger = get_logger(__name__)

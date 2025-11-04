@@ -4,11 +4,10 @@ from uuid import UUID, uuid4
 from typing import Optional
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select
 from models.uploaded_file import UploadedFile, ProcessingStatus
 from common.logger import get_logger
 from common.errors import NotFoundError
-from config.settings import settings
 
 logger = get_logger(__name__)
 
