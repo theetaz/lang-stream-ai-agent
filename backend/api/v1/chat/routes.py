@@ -16,7 +16,7 @@ from models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
 from common.response import APIResponse, success_response
 from uuid import UUID
-from typing import List
+from typing import List, Optional
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
