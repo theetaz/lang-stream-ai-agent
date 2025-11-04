@@ -52,8 +52,13 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
-        """Construct async database URL from components."""
+        """Construct async database URL from components (for SQLAlchemy)."""
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    
+    @property
+    def psycopg_database_url(self) -> str:
+        """Construct database URL for psycopg3 (for LangGraph checkpointing)."""
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     class Config:
         env_file = ".env"

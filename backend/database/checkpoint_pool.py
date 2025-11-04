@@ -1,21 +1,27 @@
-from langgraph.checkpoint.postgres import PostgresSaver
-from psycopg_pool import ConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
 from config.settings import settings
 
-checkpoint_pool = ConnectionPool(
-    conninfo=settings.database_url,
-    min_size=1,
-    max_size=20,
-    kwargs={"autocommit": True},
-    timeout=30
-)
+_checkpointer = None
+_pool = None
 
-checkpointer = PostgresSaver(checkpoint_pool)
-
-def setup_checkpointer():
-    checkpointer.setup()
+async def get_async_checkpointer():
+    global _checkpointer, _pool
+    if _checkpointer is None:
+        _pool = AsyncConnectionPool(
+            conninfo=settings.psycopg_database_url,
+            min_size=1,
+            max_size=20,
+            timeout=30,
+            open=False
+        )
+        await _pool.open()
+        _checkpointer = AsyncPostgresSaver(_pool)
+        await _checkpointer.setup()
+    return _checkpointer
 
 async def close_checkpointer():
-    checkpoint_pool.close()
-    await checkpoint_pool.wait_closed()
+    global _pool
+    if _pool:
+        await _pool.close()
 

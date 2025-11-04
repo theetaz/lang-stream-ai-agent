@@ -5,7 +5,7 @@ from uuid import UUID
 
 from agents.langgraph_agent import get_graph, stream_graph
 from schemas.chat import ChatRequest, ChatResponse
-from database.checkpoint_pool import checkpointer
+# Checkpointer is now loaded lazily within stream_graph
 from api.v1.chat.message_service import message_service
 from api.v1.chat.session_service import session_service
 from models.chat_message import MessageRole
@@ -45,7 +45,7 @@ class ChatService:
                 user_input,
                 session_id=session_id,
                 user_id=user_id,
-                checkpointer=checkpointer if session_id else None
+                use_checkpointing=bool(session_id)
             ):
                 event_type = event.get("type")
                 event_data = event.get("data", {})

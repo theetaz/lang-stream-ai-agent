@@ -146,7 +146,7 @@ async def stream_graph(
     user_input: str,
     session_id: Optional[UUID] = None,
     user_id: Optional[int] = None,
-    checkpointer: Optional[BaseCheckpointSaver] = None
+    use_checkpointing: bool = False
 ) -> AsyncIterator[dict]:
     """
     Stream the graph response with tool calls and tokens.
@@ -156,6 +156,11 @@ async def stream_graph(
 
     logger = logging.getLogger(__name__)
 
+    checkpointer = None
+    if use_checkpointing and session_id:
+        from database.checkpoint_pool import get_async_checkpointer
+        checkpointer = await get_async_checkpointer()
+    
     graph = get_graph(checkpointer=checkpointer)
 
     # Create input with proper message format
