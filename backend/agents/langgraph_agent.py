@@ -25,7 +25,7 @@ def get_llm():
     )
 
 
-def get_tools():
+def get_tools(include_memory: bool = False):
     """Get available tools for the agent"""
     from langchain_core.tools import tool
 
@@ -75,7 +75,15 @@ def get_tools():
 
         return str(result)
 
-    return [tavily_search]
+    tools = [tavily_search]
+    
+    if include_memory:
+        from agents.tools.semantic_memory_tool import get_memory_tools
+        from agents.tools.episodic_memory_tool import get_episodic_tools
+        tools.extend(get_memory_tools())
+        tools.extend(get_episodic_tools())
+    
+    return tools
 
 
 def should_continue(state: MessagesState) -> Literal["tools", END]:
@@ -92,7 +100,7 @@ def should_continue(state: MessagesState) -> Literal["tools", END]:
 
 def call_model(state: MessagesState):
     """Call the OpenAI model with tools"""
-    tools = get_tools()
+    tools = get_tools(include_memory=True)
     llm = get_llm()
     llm_with_tools = llm.bind_tools(tools)
 
@@ -108,7 +116,7 @@ def get_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
     START -> call_model -> [should_continue] -> tools -> call_model -> END
                                               -> END
     """
-    tools = get_tools()
+    tools = get_tools(include_memory=True)
     tool_node = ToolNode(tools)
 
     graph = StateGraph(MessagesState)
