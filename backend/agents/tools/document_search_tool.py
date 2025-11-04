@@ -16,26 +16,33 @@ async def _search_documents_impl(query: str, config: Optional[RunnableConfig] = 
         user_id = None
         session_id = None
         
+        logger.info(f"Tool config: {config}")
+        
         if config and "configurable" in config:
             user_id_str = config["configurable"].get("user_id")
             session_id_str = config["configurable"].get("thread_id")
+            
+            logger.info(f"Extracted from config - user_id_str: {user_id_str}, session_id_str: {session_id_str}")
             
             if user_id_str:
                 try:
                     user_id = int(user_id_str)
                 except (ValueError, TypeError):
+                    logger.error(f"Failed to convert user_id_str to int: {user_id_str}")
                     pass
             
             if session_id_str:
                 try:
                     session_id = UUID(session_id_str)
                 except (ValueError, TypeError):
+                    logger.error(f"Failed to convert session_id_str to UUID: {session_id_str}")
                     pass
         
         if not user_id:
+            logger.error("User context not available from config")
             return "Unable to search documents: User context not available."
         
-        logger.info(f"Searching documents for user {user_id}: {query}")
+        logger.info(f"🔍 Document search - user_id: {user_id}, session_id: {session_id}, query: '{query}'")
         
         async with AsyncSessionLocal() as db:
             chunks = await rag_service.search_documents(
@@ -46,7 +53,10 @@ async def _search_documents_impl(query: str, config: Optional[RunnableConfig] = 
                 limit=limit
             )
             
+            logger.info(f"RAG service returned {len(chunks)} chunks")
+            
             if not chunks:
+                logger.warning("No chunks found - returning error message to AI")
                 return "No relevant information found in your uploaded documents. Try uploading files first, then ask me about them once they're processed."
             
             # Format results nicely
@@ -54,15 +64,21 @@ async def _search_documents_impl(query: str, config: Optional[RunnableConfig] = 
             results.append(f"Found {len(chunks)} relevant excerpts from your documents:\n")
             
             for i, chunk in enumerate(chunks, 1):
-                filename = chunk.file.filename if chunk.file else "Unknown file"
-                content = chunk.content[:400]  # Limit content length
-                if len(chunk.content) > 400:
-                    content += "..."
-                
-                results.append(f"\n📄 Source {i}: {filename}")
-                results.append(f"{content}\n")
+                try:
+                    filename = chunk.file.filename if chunk.file else "Unknown file"
+                    content = chunk.content[:400]  # Limit content length
+                    if len(chunk.content) > 400:
+                        content += "..."
+                    
+                    results.append(f"\n📄 Source {i}: {filename}")
+                    results.append(f"{content}\n")
+                    logger.info(f"  Added chunk {i} from {filename}")
+                except Exception as e:
+                    logger.error(f"Error formatting chunk {i}: {e}", exc_info=True)
             
-            return "\n".join(results)
+            formatted_result = "\n".join(results)
+            logger.info(f"Returning {len(formatted_result)} characters to AI")
+            return formatted_result
             
     except Exception as e:
         logger.error(f"Error searching documents: {e}", exc_info=True)
@@ -73,11 +89,17 @@ async def search_user_documents(query: str, config: Optional[RunnableConfig] = N
     """
     Search through user's uploaded documents using semantic similarity.
     
-    Use this tool when the user asks about their uploaded documents or files:
+    **IMPORTANT**: ALWAYS use this tool when:
+    - User uploads a file and asks about it
+    - User asks "what is this file?" or "explain this file"
+    - User mentions "my document", "this PDF", "uploaded file"
+    - User asks questions about content that might be in their files
+    
+    Examples:
     - "What does my PDF say about X?"
-    - "Find information about Y in my uploaded files"
+    - "Explain this file"
     - "Summarize the document I uploaded"
-    - "What's in my documents about Z?"
+    - "What's in my files about Z?"
     
     Args:
         query: What to search for in the documents

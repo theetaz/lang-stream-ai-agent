@@ -74,3 +74,23 @@ async def delete_file(
     return success_response(
         {"file_id": str(file_id)}, message="File deleted successfully"
     )
+
+
+@router.post("/{file_id}/reprocess", response_model=APIResponse[dict])
+async def reprocess_file(
+    file_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually trigger file reprocessing (for debugging)"""
+    file = await file_service.get_file(db, file_id, current_user.id)
+    
+    from api.v1.chat.document_processor import document_processor
+    
+    # Process immediately (not in background) for debugging
+    await document_processor.process_file(file_id)
+    
+    return success_response(
+        {"file_id": str(file_id), "status": "processing_triggered"},
+        message="File processing triggered"
+    )

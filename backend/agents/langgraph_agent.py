@@ -102,11 +102,24 @@ def should_continue(state: MessagesState) -> Literal["tools", END]:
 
 def call_model(state: MessagesState):
     """Call the OpenAI model with tools"""
+    from langchain_core.messages import SystemMessage
+    
     tools = get_tools(include_memory=True)
     llm = get_llm()
     llm_with_tools = llm.bind_tools(tools)
 
-    response = llm_with_tools.invoke(state["messages"])
+    # Add system message if not already present
+    messages = state["messages"]
+    if not messages or not isinstance(messages[0], SystemMessage):
+        system_msg = SystemMessage(
+            content="You are a helpful AI assistant with access to tools. "
+            "When users upload files or ask about documents, you MUST use the search_user_documents tool to find information in their files. "
+            "When users ask questions requiring current information, use tavily_search. "
+            "Always provide detailed, helpful responses based on the information you find."
+        )
+        messages = [system_msg] + messages
+
+    response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
 
 

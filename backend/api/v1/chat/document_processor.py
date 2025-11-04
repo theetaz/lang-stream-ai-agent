@@ -1,60 +1,129 @@
 from uuid import UUID
+from sqlalchemy import select, update
 from database.db_client import AsyncSessionLocal
-from api.v1.files.service import file_service
 from api.v1.chat.chunking_service import chunking_service
 from common.embedding_service import embedding_service
-from models.uploaded_file import ProcessingStatus
+from models.uploaded_file import UploadedFile, ProcessingStatus
 from models.file_chunk import FileChunk
 from common.logger import get_logger
 import traceback
+import os
 
 logger = get_logger(__name__)
 
 class DocumentProcessor:
     async def process_file(self, file_id: UUID):
+        """Process uploaded file: extract text, chunk, embed, and store"""
+        logger.info(f"Starting to process file {file_id}")
+        
         async with AsyncSessionLocal() as db:
             try:
-                file = await file_service.get_file(db, file_id, None)
+                # Get file from database
+                stmt = select(UploadedFile).where(UploadedFile.id == file_id)
+                result = await db.execute(stmt)
+                file = result.scalar_one_or_none()
+                
                 if not file:
-                    logger.error(f"File {file_id} not found")
+                    logger.error(f"File {file_id} not found in database")
                     return
                 
-                await file_service.update_status(db, file_id, ProcessingStatus.PROCESSING)
+                logger.info(f"Processing file: {file.filename} at path: {file.file_path}")
                 
+                # Check if file exists
+                if not os.path.exists(file.file_path):
+                    logger.error(f"File path does not exist: {file.file_path}")
+                    file.processing_status = ProcessingStatus.FAILED
+                    await db.commit()
+                    return
+                
+                # Update status to PROCESSING
+                file.processing_status = ProcessingStatus.PROCESSING
+                await db.commit()
+                logger.info(f"File {file_id} status updated to PROCESSING")
+                
+                # Extract text from document
                 try:
+                    logger.info(f"Attempting to convert file with Docling: {file.filename}")
                     from docling.document_converter import DocumentConverter
                     converter = DocumentConverter()
-                    result = converter.convert(file.file_path)
-                    markdown = result.document.export_to_markdown()
-                except ImportError:
-                    logger.warning("Docling not available, reading file as text")
+                    conv_result = converter.convert(file.file_path)
+                    markdown = conv_result.document.export_to_markdown()
+                    logger.info(f"Docling conversion successful. Text length: {len(markdown)}")
+                except ImportError as e:
+                    logger.warning(f"Docling not available ({e}), reading file as text")
                     with open(file.file_path, 'r', encoding='utf-8', errors='ignore') as f:
                         markdown = f.read()
+                    logger.info(f"Read file as text. Length: {len(markdown)}")
+                except Exception as e:
+                    logger.error(f"Docling conversion failed: {e}")
+                    logger.warning("Falling back to text reading")
+                    with open(file.file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        markdown = f.read()
+                    logger.info(f"Fallback text reading successful. Length: {len(markdown)}")
                 
+                # Sanitize text: remove null bytes (PostgreSQL can't handle them)
+                markdown = markdown.replace('\x00', '')
+                logger.info(f"Sanitized text. Final length: {len(markdown)}")
+                
+                if not markdown or len(markdown.strip()) < 10:
+                    logger.error(f"No meaningful content extracted from file {file_id}")
+                    file.processing_status = ProcessingStatus.FAILED
+                    await db.commit()
+                    return
+                
+                # Chunk the text
+                logger.info(f"Chunking text for file {file_id}")
                 chunks = chunking_service.chunk_text(markdown, chunk_size=1000, overlap=200)
+                logger.info(f"Created {len(chunks)} chunks for file {file_id}")
                 
-                embeddings = await embedding_service.batch_embeddings(
-                    [chunk.content for chunk in chunks]
-                )
+                if not chunks:
+                    logger.error(f"No chunks created for file {file_id}")
+                    file.processing_status = ProcessingStatus.FAILED
+                    await db.commit()
+                    return
                 
+                # Generate embeddings
+                logger.info(f"Generating embeddings for {len(chunks)} chunks")
+                try:
+                    embeddings = await embedding_service.batch_embeddings(
+                        [chunk.content for chunk in chunks]
+                    )
+                    logger.info(f"Generated {len(embeddings)} embeddings")
+                except Exception as e:
+                    logger.error(f"Failed to generate embeddings: {e}\n{traceback.format_exc()}")
+                    file.processing_status = ProcessingStatus.FAILED
+                    await db.commit()
+                    return
+                
+                # Save chunks to database
+                logger.info(f"Saving {len(chunks)} chunks to database")
                 for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                    # Sanitize chunk content (remove null bytes)
+                    sanitized_content = chunk.content.replace('\x00', '')
+                    
                     file_chunk = FileChunk(
                         file_id=file_id,
                         chunk_index=idx,
-                        content=chunk.content,
+                        content=sanitized_content,
                         embedding=embedding,
                         meta=chunk.metadata
                     )
                     db.add(file_chunk)
                 
+                # Update status to COMPLETED
+                file.processing_status = ProcessingStatus.COMPLETED
                 await db.commit()
-                await file_service.update_status(db, file_id, ProcessingStatus.COMPLETED)
                 
-                logger.info(f"Successfully processed file {file_id} into {len(chunks)} chunks")
+                logger.info(f"✅ Successfully processed file {file_id} ({file.filename}) into {len(chunks)} chunks")
                 
             except Exception as e:
-                logger.error(f"Failed to process file {file_id}: {e}\n{traceback.format_exc()}")
-                await file_service.update_status(db, file_id, ProcessingStatus.FAILED)
+                logger.error(f"❌ Failed to process file {file_id}: {e}\n{traceback.format_exc()}")
+                try:
+                    # Try to update status to FAILED
+                    stmt = update(UploadedFile).where(UploadedFile.id == file_id).values(processing_status=ProcessingStatus.FAILED)
+                    await db.execute(stmt)
+                    await db.commit()
+                except Exception as update_error:
+                    logger.error(f"Failed to update status to FAILED: {update_error}")
 
 document_processor = DocumentProcessor()
-

@@ -30,16 +30,21 @@ export function ChatContainer({ user }: ChatContainerProps) {
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingToolCalls, setStreamingToolCalls] = useState<ToolCallData[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isNewSession, setIsNewSession] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Load message history when session changes
+  // Load message history when session changes (but not for new sessions)
   useEffect(() => {
-    if (currentSessionId) {
+    if (currentSessionId && !isNewSession) {
       loadSessionHistory(currentSessionId);
-    } else {
+    } else if (!currentSessionId) {
       setMessages([]);
+    }
+    
+    if (isNewSession) {
+      setIsNewSession(false);
     }
   }, [currentSessionId]);
 
@@ -77,6 +82,7 @@ export function ChatContainer({ user }: ChatContainerProps) {
     mutationFn: () => createSession("New Chat"),
     onSuccess: (data) => {
       if (data.data) {
+        setIsNewSession(true);
         setCurrentSessionId(data.data.id);
         queryClient.invalidateQueries({ queryKey: ["sessions"] });
       }
