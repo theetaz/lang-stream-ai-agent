@@ -1,7 +1,7 @@
 from api.v1.auth.routes import router as auth_router
 from api.v1.chat.routes import router as chat_router
-from api.v1.user.routes import router as user_router
 from api.v1.files.routes import router as files_router
+from api.v1.user.routes import router as user_router
 from fastapi.routing import APIRouter
 
 # set api router prefixes
