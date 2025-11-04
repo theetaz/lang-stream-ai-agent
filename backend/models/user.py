@@ -1,5 +1,6 @@
 from models.base import Base, TimestampMixin
 from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy.orm import relationship
 
 
 class User(Base, TimestampMixin):
@@ -13,6 +14,9 @@ class User(Base, TimestampMixin):
     name = Column(String(255), nullable=True)
     avatar_url = Column(String(512), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+
+    chat_sessions = relationship("ChatSession", back_populates="user")
+    uploaded_files = relationship("UploadedFile", back_populates="user")
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email='{self.email}', name='{self.name}')>"
