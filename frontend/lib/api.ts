@@ -1,3 +1,5 @@
+import { getAuthHeaders } from "./utils";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface APIResponse<T> {
@@ -17,6 +19,7 @@ export async function fetchAPI<T>(
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
       ...options?.headers
     }
   });

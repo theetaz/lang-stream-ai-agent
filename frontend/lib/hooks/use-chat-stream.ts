@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react"
 import type { ToolCallData } from "@/components/tool-call"
+import { getAuthHeaders } from "@/lib/utils"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
@@ -41,6 +42,7 @@ export function useChatStream(options: UseChatStreamOptions = {}) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...getAuthHeaders(),
           },
           body: JSON.stringify({ input }),
           signal: abortControllerRef.current.signal,
