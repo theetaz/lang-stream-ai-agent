@@ -127,7 +127,6 @@ class ChatService:
                 
                 message_count = await message_service.count_messages(db, session_id)
                 if message_count == 3:
-                    import asyncio
                     from api.v1.chat.title_service import title_generator
                     asyncio.create_task(title_generator.generate_title(db, session_id, user_id))
             
