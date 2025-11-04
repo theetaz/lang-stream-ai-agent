@@ -1,4 +1,4 @@
-import { getAuthHeaders } from "./utils";
+import { getAuthHeaders } from "./auth-interceptor";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -14,12 +14,13 @@ export async function fetchAPI<T>(
   options?: RequestInit
 ): Promise<APIResponse<T>> {
   const url = `${API_URL}${endpoint}`;
+  const authHeaders = await getAuthHeaders();
 
   const response = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...getAuthHeaders(),
+      ...authHeaders,
       ...options?.headers
     }
   });

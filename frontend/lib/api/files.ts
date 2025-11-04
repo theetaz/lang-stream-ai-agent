@@ -1,5 +1,5 @@
 import { fetchAPI, APIResponse } from "../api";
-import { getAuthHeaders } from "../utils";
+import { getAuthHeaders } from "../auth-interceptor";
 import type { UploadedFile } from "../types/file";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -8,6 +8,12 @@ export async function uploadFile(
   file: File,
   sessionId?: string
 ): Promise<APIResponse<UploadedFile>> {
+  const authHeaders = await getAuthHeaders();
+  
+  if (!authHeaders.Authorization) {
+    throw new Error("Not authenticated. Please log in again.");
+  }
+
   const formData = new FormData();
   formData.append("file", file);
 
@@ -17,9 +23,7 @@ export async function uploadFile(
 
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      ...getAuthHeaders(),
-    },
+    headers: authHeaders,
     body: formData,
   });
 

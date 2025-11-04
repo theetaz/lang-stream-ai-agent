@@ -32,10 +32,10 @@ export function ChatContainer({ user, sessionId }: ChatContainerProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: filesData } = useQuery({
+  const { data: filesData, refetch: refetchFiles } = useQuery({
     queryKey: ["files", sessionId],
     queryFn: () => getFiles(sessionId),
-    enabled: !!sessionId,
+    refetchInterval: 5000, // Refetch every 5 seconds to update processing status
   });
 
   const files = filesData?.data || [];
@@ -43,7 +43,7 @@ export function ChatContainer({ user, sessionId }: ChatContainerProps) {
   const uploadMutation = useMutation({
     mutationFn: (file: File) => uploadFile(file, sessionId),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["files", sessionId] });
+      refetchFiles();
       toast({
         title: "File uploaded",
         description: `${data.data?.filename} is being processed`,
@@ -61,7 +61,7 @@ export function ChatContainer({ user, sessionId }: ChatContainerProps) {
   const deleteMutation = useMutation({
     mutationFn: (fileId: string) => deleteFile(fileId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["files", sessionId] });
+      refetchFiles();
       toast({
         title: "File deleted",
         description: "File removed successfully",
