@@ -1,14 +1,17 @@
+import uuid
+
 from models.base import Base, TimestampMixin
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 
 class Session(Base, TimestampMixin):
     __tablename__ = "sessions"
 
-    id = Column(String(255), primary_key=True, index=True)  # UUID session ID
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     refresh_token_hash = Column(String(255), nullable=False, unique=True, index=True)
     device_info = Column(String(255), nullable=True)  # Device name/browser

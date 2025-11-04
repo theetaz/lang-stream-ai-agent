@@ -1,5 +1,8 @@
+import uuid
+
 from models.base import Base, TimestampMixin
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Boolean, Column, String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 
@@ -7,7 +10,7 @@ class User(Base, TimestampMixin):
 
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=True)  # For email/password auth
     google_id = Column(String(255), unique=True, nullable=True, index=True)
