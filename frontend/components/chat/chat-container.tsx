@@ -1,14 +1,19 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage, type Message } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
+import { FileList } from "@/components/file-list";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChatStream, type StreamEvent } from "@/lib/hooks/use-chat-stream";
 import { type ToolCallData } from "@/components/tool-call";
 import { ChatHeader } from "./chat-header";
 import { ChatEmptyState } from "./chat-empty-state";
 import { StreamingMessage } from "./streaming-message";
+import { uploadFile, getFiles, deleteFile } from "@/lib/api/files";
+import { useToast } from "@/hooks/use-toast";
+import type { UploadedFile } from "@/lib/types/file";
 
 interface ChatContainerProps {
   user: {
@@ -16,13 +21,60 @@ interface ChatContainerProps {
     email?: string;
     image?: string;
   };
+  sessionId?: string;
 }
 
-export function ChatContainer({ user }: ChatContainerProps) {
+export function ChatContainer({ user, sessionId }: ChatContainerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingToolCalls, setStreamingToolCalls] = useState<ToolCallData[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: filesData } = useQuery({
+    queryKey: ["files", sessionId],
+    queryFn: () => getFiles(sessionId),
+    enabled: !!sessionId,
+  });
+
+  const files = filesData?.data || [];
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => uploadFile(file, sessionId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["files", sessionId] });
+      toast({
+        title: "File uploaded",
+        description: `${data.data?.filename} is being processed`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Upload failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (fileId: string) => deleteFile(fileId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["files", sessionId] });
+      toast({
+        title: "File deleted",
+        description: "File removed successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Delete failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleToolEvent = (event: StreamEvent) => {
     if (event.type === "tool_start") {
@@ -118,6 +170,14 @@ export function ChatContainer({ user }: ChatContainerProps) {
     await streamMessage(content);
   };
 
+  const handleFileSelect = (file: File) => {
+    uploadMutation.mutate(file);
+  };
+
+  const handleFileDelete = (fileId: string) => {
+    deleteMutation.mutate(fileId);
+  };
+
   return (
     <div className="flex h-screen flex-col bg-background">
       <ChatHeader user={user} />
@@ -143,9 +203,18 @@ export function ChatContainer({ user }: ChatContainerProps) {
         )}
 
         <div className="border-t bg-background">
-          <div className="mx-auto max-w-3xl p-4">
-            <ChatInput onSend={handleSendMessage} disabled={isStreaming} placeholder="Ask anything..." />
-            <p className="mt-2 text-center text-xs text-muted-foreground">
+          <div className="mx-auto max-w-3xl p-4 space-y-3">
+            {files.length > 0 && (
+              <FileList files={files} onDelete={handleFileDelete} />
+            )}
+            <ChatInput
+              onSend={handleSendMessage}
+              onFileSelect={handleFileSelect}
+              disabled={isStreaming}
+              isUploading={uploadMutation.isPending}
+              placeholder="Ask anything..."
+            />
+            <p className="text-center text-xs text-muted-foreground">
               LangGraph AI can make mistakes. Check important info.
             </p>
           </div>
@@ -154,4 +223,3 @@ export function ChatContainer({ user }: ChatContainerProps) {
     </div>
   );
 }
-

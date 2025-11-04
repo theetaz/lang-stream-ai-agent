@@ -4,17 +4,22 @@ import * as React from "react"
 import { Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { FileUploadButton } from "@/components/file-upload-button"
 import { cn } from "@/lib/utils"
 
 interface ChatInputProps {
   onSend: (message: string) => void
+  onFileSelect?: (file: File) => void
   disabled?: boolean
+  isUploading?: boolean
   placeholder?: string
 }
 
 export function ChatInput({
   onSend,
+  onFileSelect,
   disabled = false,
+  isUploading = false,
   placeholder = "Ask anything...",
 }: ChatInputProps) {
   const [input, setInput] = React.useState("")
@@ -53,6 +58,13 @@ export function ChatInput({
       onSubmit={handleSubmit}
       className="relative flex items-end gap-2 rounded-lg border border-input bg-background p-2"
     >
+      {onFileSelect && (
+        <FileUploadButton
+          onFileSelect={onFileSelect}
+          disabled={disabled}
+          isUploading={isUploading}
+        />
+      )}
       <Textarea
         ref={textareaRef}
         value={input}
