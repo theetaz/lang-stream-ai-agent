@@ -80,8 +80,10 @@ def get_tools(include_memory: bool = False):
     if include_memory:
         from agents.tools.semantic_memory_tool import get_memory_tools
         from agents.tools.episodic_memory_tool import get_episodic_tools
+        from agents.tools.document_search_tool import get_document_tools
         tools.extend(get_memory_tools())
         tools.extend(get_episodic_tools())
+        tools.extend(get_document_tools())
     
     return tools
 
