@@ -2,14 +2,13 @@ import asyncio
 from typing import List, Optional
 from uuid import UUID
 
+from api.v1.files.service import file_service
 from auth.utils import get_current_user
 from common.response import APIResponse, success_response
 from database.db_client import get_db
 from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import StreamingResponse
 from models.user import User
 from schemas.file import UploadedFileResponse
-from api.v1.files.service import file_service
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/files", tags=["files"])
