@@ -92,11 +92,20 @@ async def get_me(current_user=Depends(get_current_user)):
 # ============= Session Management Endpoints =============
 @router.get("/sessions", response_model=APIResponse[SessionsListResponse])
 async def get_sessions(
+    is_active: bool | None = None,
+    limit: int = 50,
+    offset: int = 0,
     current_user=Depends(get_current_user),
     service: AuthService = Depends(get_auth_service),
 ):
-    """Get all active sessions for the current user."""
-    result = await service.get_sessions(current_user.id)
+    if limit > 100:
+        limit = 100
+    if limit < 1:
+        limit = 1
+
+    result = await service.get_sessions(
+        user_id=current_user.id, is_active=is_active, limit=limit, offset=offset
+    )
     return success_response(result, message="Sessions retrieved successfully")
 
 

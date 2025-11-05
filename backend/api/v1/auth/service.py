@@ -142,17 +142,28 @@ class AuthService:
         return session
 
     async def _get_user_sessions(
-        self, user_id: int, active_only: bool = True
-    ) -> List[Session]:
+        self, user_id: int, active_only: bool = True, limit: int = 50, offset: int = 0
+    ) -> tuple[List[Session], int]:
+        """Get user sessions with pagination. Returns (sessions, total_count)"""
+        from sqlalchemy import func
+        
+        # Query for total count (more efficient)
+        count_query = select(func.count(Session.id)).where(Session.user_id == user_id)
+        if active_only:
+            count_query = count_query.where(Session.is_active == True)
+        count_result = await self.db.execute(count_query)
+        total = count_result.scalar() or 0
+        
+        # Query for paginated sessions
         query = select(Session).where(Session.user_id == user_id)
         if active_only:
             query = query.where(Session.is_active == True)
-        query = query.order_by(Session.updated_at.desc())
+        query = query.order_by(Session.updated_at.desc()).limit(limit).offset(offset)
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return list(result.scalars().all()), total
 
     async def _deactivate_all_user_sessions(self, user_id: int) -> int:
-        sessions = await self._get_user_sessions(user_id, active_only=True)
+        sessions, _ = await self._get_user_sessions(user_id, active_only=True)
         for session in sessions:
             session.is_active = False
         await self.db.commit()
@@ -286,10 +297,37 @@ class AuthService:
                     await self._deactivate_session(session_id)
         return {"message": "Logged out successfully"}
 
-    async def get_sessions(self, user_id: int) -> SessionsListResponse:
-        sessions = await self._get_user_sessions(user_id, active_only=False)
+    async def get_sessions(
+        self, 
+        user_id: int, 
+        is_active: bool | None = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> SessionsListResponse:
+        """
+        Get user sessions with optional filtering and pagination.
+        
+        Args:
+            user_id: The user ID
+            is_active: Filter by active status (None = all sessions)
+            limit: Maximum number of sessions to return
+            offset: Number of sessions to skip
+        """
+        # If is_active is None, get all sessions (don't filter)
+        if is_active is None:
+            sessions, total = await self._get_user_sessions(
+                user_id, active_only=False, limit=limit, offset=offset
+            )
+        else:
+            sessions, total = await self._get_user_sessions(
+                user_id, active_only=is_active, limit=limit, offset=offset
+            )
+        
         return SessionsListResponse(
-            sessions=[SessionResponse(**session.to_dict()) for session in sessions]
+            sessions=[SessionResponse(**session.to_dict()) for session in sessions],
+            total=total,
+            limit=limit,
+            offset=offset
         )
 
     async def delete_all_sessions(self, user_id: int) -> dict:

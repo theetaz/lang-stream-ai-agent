@@ -65,6 +65,9 @@ class SessionResponse(BaseModel):
 
 
 class SessionsListResponse(BaseModel):
-    """List of sessions response"""
+    """List of sessions response with pagination"""
 
     sessions: list[SessionResponse]
+    total: int
+    limit: int
+    offset: int
