@@ -69,5 +69,6 @@ class SessionsListResponse(BaseModel):
 
     sessions: list[SessionResponse]
     total: int
-    limit: int
-    offset: int
+    page: int
+    per_page: int
+    total_pages: int

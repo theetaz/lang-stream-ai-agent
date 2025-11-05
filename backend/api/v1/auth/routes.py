@@ -93,18 +93,31 @@ async def get_me(current_user=Depends(get_current_user)):
 @router.get("/sessions", response_model=APIResponse[SessionsListResponse])
 async def get_sessions(
     is_active: bool | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    page: int = 1,
+    per_page: int = 50,
     current_user=Depends(get_current_user),
     service: AuthService = Depends(get_auth_service),
 ):
-    if limit > 100:
-        limit = 100
-    if limit < 1:
-        limit = 1
+    """
+    Get sessions for the current user with optional filtering and pagination.
+
+    Query Parameters:
+    - is_active: Filter by active status (true/false). If not provided, returns all sessions.
+    - page: Page number (starts from 1, default: 1)
+    - per_page: Number of sessions per page (default: 50, max: 100)
+    """
+    # Validate per_page
+    if per_page > 100:
+        per_page = 100
+    if per_page < 1:
+        per_page = 1
+
+    # Validate page
+    if page < 1:
+        page = 1
 
     result = await service.get_sessions(
-        user_id=current_user.id, is_active=is_active, limit=limit, offset=offset
+        user_id=current_user.id, is_active=is_active, page=page, per_page=per_page
     )
     return success_response(result, message="Sessions retrieved successfully")
 

@@ -146,14 +146,14 @@ class AuthService:
     ) -> tuple[List[Session], int]:
         """Get user sessions with pagination. Returns (sessions, total_count)"""
         from sqlalchemy import func
-        
+
         # Query for total count (more efficient)
         count_query = select(func.count(Session.id)).where(Session.user_id == user_id)
         if active_only:
             count_query = count_query.where(Session.is_active == True)
         count_result = await self.db.execute(count_query)
         total = count_result.scalar() or 0
-        
+
         # Query for paginated sessions
         query = select(Session).where(Session.user_id == user_id)
         if active_only:
@@ -298,36 +298,45 @@ class AuthService:
         return {"message": "Logged out successfully"}
 
     async def get_sessions(
-        self, 
-        user_id: int, 
+        self,
+        user_id: int,
         is_active: bool | None = None,
-        limit: int = 50,
-        offset: int = 0
+        page: int = 1,
+        per_page: int = 50,
     ) -> SessionsListResponse:
         """
         Get user sessions with optional filtering and pagination.
-        
+
         Args:
             user_id: The user ID
             is_active: Filter by active status (None = all sessions)
-            limit: Maximum number of sessions to return
-            offset: Number of sessions to skip
+            page: Page number (starts from 1)
+            per_page: Number of sessions per page
         """
+        import math
+
+        # Convert page number to offset (page 1 = offset 0)
+        offset = (page - 1) * per_page
+
         # If is_active is None, get all sessions (don't filter)
         if is_active is None:
             sessions, total = await self._get_user_sessions(
-                user_id, active_only=False, limit=limit, offset=offset
+                user_id, active_only=False, limit=per_page, offset=offset
             )
         else:
             sessions, total = await self._get_user_sessions(
-                user_id, active_only=is_active, limit=limit, offset=offset
+                user_id, active_only=is_active, limit=per_page, offset=offset
             )
-        
+
+        # Calculate total pages
+        total_pages = math.ceil(total / per_page) if total > 0 else 0
+
         return SessionsListResponse(
             sessions=[SessionResponse(**session.to_dict()) for session in sessions],
             total=total,
-            limit=limit,
-            offset=offset
+            page=page,
+            per_page=per_page,
+            total_pages=total_pages,
         )
 
     async def delete_all_sessions(self, user_id: int) -> dict:
