@@ -1,7 +1,6 @@
 import enum
-import uuid
 
-from models.base import Base
+from models.base import Base, UUIDMixin
 from sqlalchemy import Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, String
@@ -16,10 +15,8 @@ class ProcessingStatus(str, enum.Enum):
     FAILED = "failed"
 
 
-class UploadedFile(Base):
+class UploadedFile(Base, UUIDMixin):
     __tablename__ = "uploaded_files"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )

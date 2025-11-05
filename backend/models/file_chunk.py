@@ -1,16 +1,12 @@
-import uuid
-
-from models.base import Base
+from models.base import Base, UUIDMixin
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 
-class FileChunk(Base):
+class FileChunk(Base, UUIDMixin):
     __tablename__ = "file_chunks"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     file_id = Column(
         UUID(as_uuid=True),
         ForeignKey("uploaded_files.id", ondelete="CASCADE"),

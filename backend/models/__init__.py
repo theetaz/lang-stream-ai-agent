@@ -1,4 +1,4 @@
-from models.base import Base, TimestampMixin
+from models.base import Base, TimestampMixin, UUIDMixin
 from models.session import Session
 from models.user import User
 from models.chat_session import ChatSession
@@ -8,6 +8,7 @@ from models.file_chunk import FileChunk
 
 __all__ = [
     "Base",
+    "UUIDMixin",
     "TimestampMixin",
     "User",
     "Session",

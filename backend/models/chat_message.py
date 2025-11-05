@@ -1,7 +1,6 @@
 import enum
-import uuid
 
-from models.base import Base
+from models.base import Base, UUIDMixin
 from sqlalchemy import Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Text
@@ -16,10 +15,8 @@ class MessageRole(str, enum.Enum):
     TOOL = "tool"
 
 
-class ChatMessage(Base):
+class ChatMessage(Base, UUIDMixin):
     __tablename__ = "chat_messages"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id = Column(
         UUID(as_uuid=True),
         ForeignKey("chat_sessions.id", ondelete="CASCADE"),

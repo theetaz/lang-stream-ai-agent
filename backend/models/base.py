@@ -1,6 +1,8 @@
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base
 
 # Declarative base for all models
@@ -10,6 +12,14 @@ Base = declarative_base()
 def utc_now():
     """Get current UTC datetime (timezone-naive for database compatibility)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class UUIDMixin:
+    """
+    Mixin to add UUID primary key to models.
+    """
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
 
 class TimestampMixin:

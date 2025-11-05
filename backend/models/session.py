@@ -1,15 +1,11 @@
-import uuid
-
-from models.base import Base, TimestampMixin
+from models.base import Base, TimestampMixin, UUIDMixin
 from sqlalchemy import Boolean, Column, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 
-class Session(Base, TimestampMixin):
+class Session(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "sessions"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),

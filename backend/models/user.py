@@ -1,16 +1,11 @@
-import uuid
-
-from models.base import Base, TimestampMixin
+from models.base import Base, TimestampMixin, UUIDMixin
 from sqlalchemy import Boolean, Column, String
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 
-class User(Base, TimestampMixin):
+class User(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "users"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=True)  # For email/password auth
     google_id = Column(String(255), unique=True, nullable=True, index=True)
