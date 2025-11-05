@@ -1,12 +1,16 @@
 import bcrypt
 from auth.jwt import verify_token
 from database.db_client import get_db
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from models.session import Session
 from models.user import User
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from user_agents import parse as parse_user_agent
+
+# Security scheme for Swagger UI
+security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
@@ -49,15 +53,15 @@ def get_device_info(user_agent: str | None) -> str | None:
         return None
 
 
-async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authorization header",
-        )
-
-    token = auth_header.replace("Bearer ", "")
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the current authenticated user from JWT token.
+    This dependency will automatically show the "Authorize" button in Swagger UI.
+    """
+    token = credentials.credentials
     payload = verify_token(token, token_type="access")
 
     if not payload:

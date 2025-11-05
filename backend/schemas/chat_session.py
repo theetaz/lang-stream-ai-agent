@@ -12,7 +12,7 @@ class ChatSessionUpdate(BaseModel):
 
 class ChatSessionResponse(BaseModel):
     id: UUID
-    user_id: int
+    user_id: str
     title: Optional[str]
     last_message_at: Optional[datetime]
     is_archived: bool

@@ -273,7 +273,9 @@ class AuthService:
         )
         return TokenResponse(**result)
 
-    async def logout(self, request: Request) -> dict:
+    async def logout(self, request: Request, user_id: str) -> dict:
+        """Logout the current user by deactivating their session."""
+        # Try to get session_id from JWT token in the request
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.replace("Bearer ", "")

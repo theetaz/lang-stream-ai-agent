@@ -36,7 +36,7 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     """Schema for user response."""
 
-    id: int = Field(..., description="User ID")
+    id: str = Field(..., description="User ID (UUID as string)")
     google_id: Optional[str] = Field(None, description="Google OAuth user ID")
     is_active: bool = Field(..., description="Whether the user account is active")
     created_at: datetime = Field(..., description="When the user was created")

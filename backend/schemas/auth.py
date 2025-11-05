@@ -44,7 +44,7 @@ class RefreshRequest(BaseModel):
 class UserResponse(BaseModel):
     """User info response"""
 
-    id: int
+    id: str
     email: str
     name: str | None
     avatar_url: str | None
