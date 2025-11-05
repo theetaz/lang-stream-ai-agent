@@ -26,7 +26,7 @@ class User(Base, TimestampMixin):
 
     def to_dict(self) -> dict:
         return {
-            "id": self.id,
+            "id": str(self.id),
             "email": self.email,
             "name": self.name,
             "avatar_url": self.avatar_url,

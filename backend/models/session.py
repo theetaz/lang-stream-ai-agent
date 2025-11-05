@@ -11,7 +11,10 @@ class Session(Base, TimestampMixin):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     refresh_token_hash = Column(String(255), nullable=False, unique=True, index=True)
     device_info = Column(String(255), nullable=True)  # Device name/browser
@@ -27,8 +30,8 @@ class Session(Base, TimestampMixin):
 
     def to_dict(self) -> dict:
         return {
-            "id": self.id,
-            "user_id": self.user_id,
+            "id": str(self.id),
+            "user_id": str(self.user_id),
             "device_info": self.device_info,
             "ip_address": self.ip_address,
             "user_agent": self.user_agent,

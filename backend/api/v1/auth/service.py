@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from auth.jwt import create_access_token, create_refresh_token, verify_token
 from auth.utils import get_device_info, hash_password, verify_password
-from common.errors import ValidationError, UnauthorizedError
+from common.errors import UnauthorizedError, ValidationError
 from fastapi import Request
 from models.session import Session
 from models.user import User
@@ -159,7 +159,7 @@ class AuthService:
         return len(sessions)
 
     async def create_token_response(
-        self, user, request: Request, existing_session_id: str | None = None
+        self, user: User, request: Request, existing_session_id: str | None = None
     ) -> dict:
         user_agent = request.headers.get("user-agent")
         ip_address = request.client.host if request.client else None
@@ -168,7 +168,7 @@ class AuthService:
         session_id = existing_session_id or str(uuid.uuid4())
 
         token_data = {
-            "user_id": user.id,
+            "user_id": str(user.id),
             "email": user.email,
             "name": user.name,
             "session_id": session_id,
@@ -176,7 +176,10 @@ class AuthService:
 
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(
-            {"user_id": user.id, "session_id": session_id}
+            {
+                "user_id": str(user.id),
+                "session_id": session_id,
+            }
         )
 
         if existing_session_id:
@@ -292,8 +295,8 @@ class AuthService:
         return {"message": f"Logged out from {count} session(s)"}
 
     async def delete_session(self, session_id: str, user_id: int) -> dict:
-        from common.errors import NotFoundError, ForbiddenError
-        
+        from common.errors import ForbiddenError, NotFoundError
+
         session = await self._get_session_by_id(session_id)
         if not session:
             raise NotFoundError("Session not found")
