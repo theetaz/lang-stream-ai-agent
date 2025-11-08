@@ -354,5 +354,8 @@ class AuthService:
             raise NotFoundError("Session not found")
         if session.user_id != user_id:
             raise ForbiddenError("Cannot delete other user's session")
-        await self._deactivate_session(session_id)
+        
+        # Hard delete: remove the session record from the database
+        await self.db.delete(session)
+        await self.db.commit()
         return {"message": "Session deleted successfully"}
