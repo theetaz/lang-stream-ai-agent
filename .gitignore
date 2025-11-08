@@ -32,3 +32,6 @@ backend/logs
 
 # backend uploads
 backend/backend/uploads
+
+# test results
+backend/.coverage
