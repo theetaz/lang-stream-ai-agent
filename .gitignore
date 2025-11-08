@@ -35,3 +35,6 @@ backend/backend/uploads
 
 # test results
 backend/.coverage
+
+# internal documentation
+internal_docs
