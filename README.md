@@ -101,11 +101,26 @@ npm run dev
 The backend has hot reloading enabled. Changes to files in `backend/` will reflect automatically when running in Docker.
 
 To run the backend locally (outside Docker):
+
+1. **Create and activate a virtual environment** (recommended):
 ```bash
 cd backend
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+2. **Install dependencies**:
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+3. **Run the backend**:
+```bash
 uvicorn main:app --reload
 ```
+
+The virtual environment (`.venv`) is already in `.gitignore` and should be created in the `backend/` directory.
 
 ### Adding shadcn/ui Components
 
