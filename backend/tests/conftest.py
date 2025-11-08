@@ -116,10 +116,14 @@ def mock_sessions_list(mock_user):
 def mock_request():
     """Mock FastAPI Request object."""
     request = Mock(spec=Request)
-    request.headers = {
-        "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)",
+    # Use case-insensitive dict-like object or include both cases
+    headers_mock = Mock()
+    headers_mock.get = Mock(side_effect=lambda key, default=None: {
+        "Authorization": "Bearer test_token",
         "authorization": "Bearer test_token",
-    }
+        "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)",
+    }.get(key, default))
+    request.headers = headers_mock
     request.client = Mock()
     request.client.host = "127.0.0.1"
     return request

@@ -234,9 +234,11 @@ class TestAuthService:
         """Test successful logout."""
         # Setup
         service = AuthService(mock_db)
+        # Mock the session lookup - _get_session_by_id will call db.execute
+        # This needs to return the session when _deactivate_session looks it up
         setup_db_execute_mock(mock_db, mock_session)
 
-        # Mock verify_token
+        # Mock verify_token to return payload with session_id
         from unittest.mock import patch
 
         with patch("api.v1.auth.service.verify_token") as mock_verify:
@@ -251,7 +253,11 @@ class TestAuthService:
             # Assert
             assert result is not None
             assert "message" in result
-            assert mock_db.commit.called
+            assert result["message"] == "Logged out successfully"
+            # Verify that _deactivate_session was attempted (db.execute called for session lookup)
+            assert mock_db.execute.called, "Session lookup should have been attempted"
+            # Verify commit was called (by _deactivate_session after finding and modifying the session)
+            assert mock_db.commit.called, "Commit should have been called after deactivating session"
 
     # ============= Get Sessions Tests =============
     @pytest.mark.asyncio
