@@ -248,21 +248,21 @@ def test_client():
 @pytest.fixture
 def override_dependencies(mock_user, mock_db):
     """Helper fixture to override FastAPI dependencies for authenticated routes."""
-    from auth.utils import get_current_user
     from api.v1.auth.routes import get_auth_service
     from api.v1.auth.service import AuthService
-    
+    from auth.utils import get_current_user
+
     async def override_get_current_user():
         return mock_user
-    
+
     def override_get_auth_service():
         return AuthService(mock_db)
-    
+
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_auth_service] = override_get_auth_service
-    
+
     yield
-    
+
     # Cleanup is handled by test_client fixture
 
 
