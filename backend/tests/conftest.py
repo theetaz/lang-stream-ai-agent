@@ -239,13 +239,37 @@ def override_get_auth_service(mock_auth_service):
 @pytest.fixture
 def test_client():
     """Create a test client for FastAPI app."""
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    # Clean up dependency overrides after each test
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def override_dependencies(mock_user, mock_db):
+    """Helper fixture to override FastAPI dependencies for authenticated routes."""
+    from auth.utils import get_current_user
+    from api.v1.auth.routes import get_auth_service
+    from api.v1.auth.service import AuthService
+    
+    async def override_get_current_user():
+        return mock_user
+    
+    def override_get_auth_service():
+        return AuthService(mock_db)
+    
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_auth_service] = override_get_auth_service
+    
+    yield
+    
+    # Cleanup is handled by test_client fixture
 
 
 # ============= Helper Functions =============
 def setup_db_execute_mock(mock_db, return_value=None, call_count=1):
     """Helper to setup db.execute mock.
-    
+
     Args:
         mock_db: Mock database session
         return_value: Value(s) to return. Can be a single value, list, or None
@@ -274,7 +298,11 @@ def setup_db_execute_mock(mock_db, return_value=None, call_count=1):
         for i in range(call_count):
             mock_result = MagicMock()
             if i == 0:  # First call is usually count query
-                mock_result.scalar.return_value = return_value if isinstance(return_value, int) else len(return_value) if isinstance(return_value, list) else 0
+                mock_result.scalar.return_value = (
+                    return_value
+                    if isinstance(return_value, int)
+                    else len(return_value) if isinstance(return_value, list) else 0
+                )
             else:  # Subsequent calls return the list
                 if isinstance(return_value, list):
                     mock_result.scalars.return_value.all.return_value = return_value
@@ -284,7 +312,7 @@ def setup_db_execute_mock(mock_db, return_value=None, call_count=1):
                 else:
                     mock_result.scalars.return_value.first.return_value = return_value
             mock_results.append(mock_result)
-        
+
         mock_db.execute.side_effect = mock_results
         return mock_results
 
@@ -301,10 +329,12 @@ def setup_db_multiple_execute_mock(mock_db, count_value: int, list_value: list):
     """Helper to setup db.execute mock for queries that make multiple calls (count + list)."""
     count_result = MagicMock()
     count_result.scalar.return_value = count_value
-    
+
     list_result = MagicMock()
     list_result.scalars.return_value.all.return_value = list_value
-    list_result.scalars.return_value.first.return_value = list_value[0] if list_value else None
-    
+    list_result.scalars.return_value.first.return_value = (
+        list_value[0] if list_value else None
+    )
+
     mock_db.execute.side_effect = [count_result, list_result]
     return [count_result, list_result]

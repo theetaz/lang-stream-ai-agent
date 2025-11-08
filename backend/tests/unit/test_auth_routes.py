@@ -233,28 +233,27 @@ class TestAuthRoutes:
             assert data["success"] is False
 
     # ============= Logout Endpoint Tests =============
-    def test_logout_success(self, test_client, mock_user, valid_access_token):
+    def test_logout_success(self, test_client, override_dependencies, mock_user, valid_access_token):
         """Test successful logout."""
-        # Setup
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user, patch(
-            "api.v1.auth.routes.get_db"
-        ) as mock_get_db, patch("api.v1.auth.routes.AuthService") as mock_service_class:
-            mock_get_user.return_value = mock_user
-            mock_get_db.return_value = AsyncMock()
-            mock_service = AsyncMock()
-            mock_service_class.return_value = mock_service
-            mock_service.logout.return_value = {"message": "Logged out successfully"}
+        from api.v1.auth.service import AuthService
+        
+        # Setup mock service
+        mock_service = AsyncMock(spec=AuthService)
+        mock_service.logout = AsyncMock(return_value={"message": "Logged out successfully"})
+        
+        from api.v1.auth.routes import get_auth_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_service
 
-            # Execute
-            response = test_client.post(
-                "/api/v1/auth/logout",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
+        # Execute
+        response = test_client.post(
+            "/api/v1/auth/logout",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            # Assert
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert data["success"] is True
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["success"] is True
 
     def test_logout_unauthorized(self, test_client):
         """Test logout without token."""
@@ -265,23 +264,19 @@ class TestAuthRoutes:
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     # ============= Get Me Endpoint Tests =============
-    def test_get_me_success(self, test_client, mock_user, valid_access_token):
+    def test_get_me_success(self, test_client, override_dependencies, mock_user, valid_access_token):
         """Test getting current user info."""
-        # Setup
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user_func:
-            mock_get_user_func.return_value = mock_user
+        # Execute
+        response = test_client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            # Execute
-            response = test_client.get(
-                "/api/v1/auth/me",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
-
-            # Assert
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert data["success"] is True
-            assert data["data"]["email"] == mock_user.email
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["success"] is True
+        assert data["data"]["email"] == mock_user.email
 
     def test_get_me_unauthorized(self, test_client):
         """Test get me without token."""
@@ -292,110 +287,101 @@ class TestAuthRoutes:
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     # ============= Get Sessions Endpoint Tests =============
-    def test_get_sessions_all(self, test_client, mock_user, mock_sessions_list, valid_access_token):
+    def test_get_sessions_all(self, test_client, override_dependencies, mock_user, mock_db, mock_sessions_list, valid_access_token):
         """Test getting all sessions."""
-        # Setup
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user_func, patch(
-            "api.v1.auth.routes.get_db"
-        ) as mock_get_db, patch("api.v1.auth.routes.AuthService") as mock_service_class:
-            mock_get_user_func.return_value = mock_user
-            mock_get_db.return_value = AsyncMock()
-            mock_service = AsyncMock()
-            mock_service_class.return_value = mock_service
+        from api.v1.auth.service import AuthService
+        from schemas.auth import SessionsListResponse, SessionResponse
+        
+        # Setup mock service
+        mock_service = AsyncMock(spec=AuthService)
+        sessions_response = SessionsListResponse(
+            sessions=[SessionResponse(**s.to_dict()) for s in mock_sessions_list],
+            total=len(mock_sessions_list),
+            page=1,
+            per_page=50,
+            total_pages=1,
+        )
+        mock_service.get_sessions = AsyncMock(return_value=sessions_response)
+        
+        from api.v1.auth.routes import get_auth_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_service
 
-            from schemas.auth import SessionsListResponse, SessionResponse
+        # Execute
+        response = test_client.get(
+            "/api/v1/auth/sessions",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            sessions_response = SessionsListResponse(
-                sessions=[SessionResponse(**s.to_dict()) for s in mock_sessions_list],
-                total=len(mock_sessions_list),
-                page=1,
-                per_page=50,
-                total_pages=1,
-            )
-            mock_service.get_sessions.return_value = sessions_response
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["success"] is True
+        assert data["data"]["total"] == len(mock_sessions_list)
 
-            # Execute
-            response = test_client.get(
-                "/api/v1/auth/sessions",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
-
-            # Assert
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert data["success"] is True
-            assert data["data"]["total"] == len(mock_sessions_list)
-
-    def test_get_sessions_active_only(self, test_client, mock_user, mock_sessions_list, valid_access_token):
+    def test_get_sessions_active_only(self, test_client, override_dependencies, mock_user, mock_sessions_list, valid_access_token):
         """Test getting only active sessions."""
-        # Setup
+        from api.v1.auth.service import AuthService
+        from schemas.auth import SessionsListResponse, SessionResponse
+        
         active_sessions = [s for s in mock_sessions_list if s.is_active]
+        
+        # Setup mock service
+        mock_service = AsyncMock(spec=AuthService)
+        sessions_response = SessionsListResponse(
+            sessions=[SessionResponse(**s.to_dict()) for s in active_sessions],
+            total=len(active_sessions),
+            page=1,
+            per_page=50,
+            total_pages=1,
+        )
+        mock_service.get_sessions = AsyncMock(return_value=sessions_response)
+        
+        from api.v1.auth.routes import get_auth_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_service
 
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user_func, patch(
-            "api.v1.auth.routes.get_db"
-        ) as mock_get_db, patch("api.v1.auth.routes.AuthService") as mock_service_class:
-            mock_get_user_func.return_value = mock_user
-            mock_get_db.return_value = AsyncMock()
-            mock_service = AsyncMock()
-            mock_service_class.return_value = mock_service
+        # Execute
+        response = test_client.get(
+            "/api/v1/auth/sessions?is_active=true",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            from schemas.auth import SessionsListResponse, SessionResponse
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["success"] is True
+        assert data["data"]["total"] == len(active_sessions)
 
-            sessions_response = SessionsListResponse(
-                sessions=[SessionResponse(**s.to_dict()) for s in active_sessions],
-                total=len(active_sessions),
-                page=1,
-                per_page=50,
-                total_pages=1,
-            )
-            mock_service.get_sessions.return_value = sessions_response
-
-            # Execute
-            response = test_client.get(
-                "/api/v1/auth/sessions?is_active=true",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
-
-            # Assert
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert data["success"] is True
-            assert data["data"]["total"] == len(active_sessions)
-
-    def test_get_sessions_pagination(self, test_client, mock_user, mock_sessions_list, valid_access_token):
+    def test_get_sessions_pagination(self, test_client, override_dependencies, mock_user, mock_sessions_list, valid_access_token):
         """Test sessions pagination."""
-        # Setup
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user_func, patch(
-            "api.v1.auth.routes.get_db"
-        ) as mock_get_db, patch("api.v1.auth.routes.AuthService") as mock_service_class:
-            mock_get_user_func.return_value = mock_user
-            mock_get_db.return_value = AsyncMock()
-            mock_service = AsyncMock()
-            mock_service_class.return_value = mock_service
+        from api.v1.auth.service import AuthService
+        from schemas.auth import SessionsListResponse, SessionResponse
+        
+        # Setup mock service
+        mock_service = AsyncMock(spec=AuthService)
+        sessions_response = SessionsListResponse(
+            sessions=[SessionResponse(**s.to_dict()) for s in mock_sessions_list[:2]],
+            total=len(mock_sessions_list),
+            page=1,
+            per_page=2,
+            total_pages=3,
+        )
+        mock_service.get_sessions = AsyncMock(return_value=sessions_response)
+        
+        from api.v1.auth.routes import get_auth_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_service
 
-            from schemas.auth import SessionsListResponse, SessionResponse
+        # Execute
+        response = test_client.get(
+            "/api/v1/auth/sessions?page=1&per_page=2",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            sessions_response = SessionsListResponse(
-                sessions=[SessionResponse(**s.to_dict()) for s in mock_sessions_list[:2]],
-                total=len(mock_sessions_list),
-                page=1,
-                per_page=2,
-                total_pages=3,
-            )
-            mock_service.get_sessions.return_value = sessions_response
-
-            # Execute
-            response = test_client.get(
-                "/api/v1/auth/sessions?page=1&per_page=2",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
-
-            # Assert
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert data["success"] is True
-            assert data["data"]["page"] == 1
-            assert data["data"]["per_page"] == 2
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["success"] is True
+        assert data["data"]["page"] == 1
+        assert data["data"]["per_page"] == 2
 
     def test_get_sessions_unauthorized(self, test_client):
         """Test get sessions without token."""
@@ -406,96 +392,92 @@ class TestAuthRoutes:
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     # ============= Delete Session Endpoint Tests =============
-    def test_delete_session_success(self, test_client, mock_user, mock_session, valid_access_token):
+    def test_delete_session_success(self, test_client, override_dependencies, mock_user, mock_session, valid_access_token):
         """Test successful session deletion."""
-        # Setup
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user_func, patch(
-            "api.v1.auth.routes.get_db"
-        ) as mock_get_db, patch("api.v1.auth.routes.AuthService") as mock_service_class:
-            mock_get_user_func.return_value = mock_user
-            mock_get_db.return_value = AsyncMock()
-            mock_service = AsyncMock()
-            mock_service_class.return_value = mock_service
-            mock_service.delete_session.return_value = {"message": "Session deleted successfully"}
+        from api.v1.auth.service import AuthService
+        
+        # Setup mock service
+        mock_service = AsyncMock(spec=AuthService)
+        mock_service.delete_session = AsyncMock(return_value={"message": "Session deleted successfully"})
+        
+        from api.v1.auth.routes import get_auth_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_service
 
-            # Execute
-            response = test_client.delete(
-                f"/api/v1/auth/sessions/{mock_session.id}",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
+        # Execute
+        response = test_client.delete(
+            f"/api/v1/auth/sessions/{mock_session.id}",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            # Assert
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert data["success"] is True
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["success"] is True
 
-    def test_delete_session_not_found(self, test_client, mock_user, valid_access_token):
+    def test_delete_session_not_found(self, test_client, override_dependencies, mock_user, valid_access_token):
         """Test deleting non-existent session."""
-        # Setup
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user_func, patch(
-            "api.v1.auth.routes.get_db"
-        ) as mock_get_db, patch("api.v1.auth.routes.AuthService") as mock_service_class:
-            mock_get_user_func.return_value = mock_user
-            mock_get_db.return_value = AsyncMock()
-            mock_service = AsyncMock()
-            mock_service_class.return_value = mock_service
-            mock_service.delete_session.side_effect = NotFoundError("Session not found")
+        from api.v1.auth.service import AuthService
+        
+        # Setup mock service
+        mock_service = AsyncMock(spec=AuthService)
+        mock_service.delete_session = AsyncMock(side_effect=NotFoundError("Session not found"))
+        
+        from api.v1.auth.routes import get_auth_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_service
 
-            # Execute
-            response = test_client.delete(
-                f"/api/v1/auth/sessions/{uuid.uuid4()}",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
+        # Execute
+        response = test_client.delete(
+            f"/api/v1/auth/sessions/{uuid.uuid4()}",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            # Assert
-            assert response.status_code == status.HTTP_404_NOT_FOUND
-            data = response.json()
-            assert data["success"] is False
+        # Assert
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        data = response.json()
+        assert data["success"] is False
 
-    def test_delete_session_forbidden(self, test_client, mock_user, mock_session, valid_access_token):
+    def test_delete_session_forbidden(self, test_client, override_dependencies, mock_user, mock_session, valid_access_token):
         """Test deleting another user's session."""
-        # Setup
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user_func, patch(
-            "api.v1.auth.routes.get_db"
-        ) as mock_get_db, patch("api.v1.auth.routes.AuthService") as mock_service_class:
-            mock_get_user_func.return_value = mock_user
-            mock_get_db.return_value = AsyncMock()
-            mock_service = AsyncMock()
-            mock_service_class.return_value = mock_service
-            mock_service.delete_session.side_effect = ForbiddenError("Cannot delete other user's session")
+        from api.v1.auth.service import AuthService
+        
+        # Setup mock service
+        mock_service = AsyncMock(spec=AuthService)
+        mock_service.delete_session = AsyncMock(side_effect=ForbiddenError("Cannot delete other user's session"))
+        
+        from api.v1.auth.routes import get_auth_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_service
 
-            # Execute
-            response = test_client.delete(
-                f"/api/v1/auth/sessions/{mock_session.id}",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
+        # Execute
+        response = test_client.delete(
+            f"/api/v1/auth/sessions/{mock_session.id}",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            # Assert
-            assert response.status_code == status.HTTP_403_FORBIDDEN
-            data = response.json()
-            assert data["success"] is False
+        # Assert
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        data = response.json()
+        assert data["success"] is False
 
     # ============= Delete All Sessions Endpoint Tests =============
-    def test_delete_all_sessions_success(self, test_client, mock_user, valid_access_token):
+    def test_delete_all_sessions_success(self, test_client, override_dependencies, mock_user, valid_access_token):
         """Test deleting all sessions."""
-        # Setup
-        with patch("api.v1.auth.routes.get_current_user") as mock_get_user_func, patch(
-            "api.v1.auth.routes.get_db"
-        ) as mock_get_db, patch("api.v1.auth.routes.AuthService") as mock_service_class:
-            mock_get_user_func.return_value = mock_user
-            mock_get_db.return_value = AsyncMock()
-            mock_service = AsyncMock()
-            mock_service_class.return_value = mock_service
-            mock_service.delete_all_sessions.return_value = {"message": "Logged out from 3 session(s)"}
+        from api.v1.auth.service import AuthService
+        
+        # Setup mock service
+        mock_service = AsyncMock(spec=AuthService)
+        mock_service.delete_all_sessions = AsyncMock(return_value={"message": "Logged out from 3 session(s)"})
+        
+        from api.v1.auth.routes import get_auth_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_service
 
-            # Execute
-            response = test_client.delete(
-                "/api/v1/auth/sessions/all",
-                headers={"Authorization": f"Bearer {valid_access_token}"},
-            )
+        # Execute
+        response = test_client.delete(
+            "/api/v1/auth/sessions/all",
+            headers={"Authorization": f"Bearer {valid_access_token}"},
+        )
 
-            # Assert
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert data["success"] is True
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["success"] is True
 
