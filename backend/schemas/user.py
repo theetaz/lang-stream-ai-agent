@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserBase(BaseModel):
@@ -42,8 +42,7 @@ class UserResponse(UserBase):
     created_at: datetime = Field(..., description="When the user was created")
     updated_at: datetime = Field(..., description="When the user was last updated")
 
-    class Config:
-        from_attributes = True  # Allow ORM model to dict conversion
+    model_config = ConfigDict(from_attributes=True)  # Allow ORM model to dict conversion
 
 
 class UserListResponse(BaseModel):

@@ -75,7 +75,7 @@ class TestAuthRoutes:
         response = test_client.post("/api/v1/auth/register", json=invalid_data)
 
         # Assert
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         data = response.json()
         assert data["success"] is False
         assert "Validation error" in data["message"]
@@ -86,7 +86,7 @@ class TestAuthRoutes:
         response = test_client.post("/api/v1/auth/register", json={"email": "test@example.com"})
 
         # Assert
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         data = response.json()
         assert data["success"] is False
 
@@ -149,7 +149,7 @@ class TestAuthRoutes:
         response = test_client.post("/api/v1/auth/login", json={"email": "test@example.com"})
 
         # Assert
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     # ============= Google OAuth Endpoint Tests =============
     def test_google_auth_success(self, test_client, sample_google_auth_data):

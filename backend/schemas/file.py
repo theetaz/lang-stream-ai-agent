@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -13,8 +13,7 @@ class UploadedFileResponse(BaseModel):
     processing_status: str
     uploaded_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class FileChunkResponse(BaseModel):
     id: UUID
@@ -24,6 +23,5 @@ class FileChunkResponse(BaseModel):
     meta: Optional[dict]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 

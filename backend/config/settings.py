@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import List
 
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -40,6 +41,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     ALGORITHM: str = "HS256"
 
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins string into a list."""
@@ -59,11 +66,6 @@ class Settings(BaseSettings):
     def psycopg_database_url(self) -> str:
         """Construct database URL for psycopg3 (for LangGraph checkpointing)."""
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
-        extra = "ignore"
 
 
 @lru_cache()
