@@ -142,28 +142,36 @@ class AuthService:
         return session
 
     async def _get_user_sessions(
-        self, user_id: int, active_only: bool = True, limit: int = 50, offset: int = 0
+        self, user_id: int, is_active: bool | None = None, limit: int = 50, offset: int = 0
     ) -> tuple[List[Session], int]:
-        """Get user sessions with pagination. Returns (sessions, total_count)"""
+        """
+        Get user sessions with pagination. Returns (sessions, total_count)
+        
+        Args:
+            user_id: The user ID
+            is_active: Filter by active status (None = all sessions, True = active only, False = inactive only)
+            limit: Maximum number of sessions to return
+            offset: Number of sessions to skip
+        """
         from sqlalchemy import func
 
         # Query for total count (more efficient)
         count_query = select(func.count(Session.id)).where(Session.user_id == user_id)
-        if active_only:
-            count_query = count_query.where(Session.is_active == True)
+        if is_active is not None:
+            count_query = count_query.where(Session.is_active == is_active)
         count_result = await self.db.execute(count_query)
         total = count_result.scalar() or 0
 
         # Query for paginated sessions
         query = select(Session).where(Session.user_id == user_id)
-        if active_only:
-            query = query.where(Session.is_active == True)
+        if is_active is not None:
+            query = query.where(Session.is_active == is_active)
         query = query.order_by(Session.updated_at.desc()).limit(limit).offset(offset)
         result = await self.db.execute(query)
         return list(result.scalars().all()), total
 
     async def _deactivate_all_user_sessions(self, user_id: int) -> int:
-        sessions, _ = await self._get_user_sessions(user_id, active_only=True)
+        sessions, _ = await self._get_user_sessions(user_id, is_active=True)
         for session in sessions:
             session.is_active = False
         await self.db.commit()
@@ -318,15 +326,10 @@ class AuthService:
         # Convert page number to offset (page 1 = offset 0)
         offset = (page - 1) * per_page
 
-        # If is_active is None, get all sessions (don't filter)
-        if is_active is None:
-            sessions, total = await self._get_user_sessions(
-                user_id, active_only=False, limit=per_page, offset=offset
-            )
-        else:
-            sessions, total = await self._get_user_sessions(
-                user_id, active_only=is_active, limit=per_page, offset=offset
-            )
+        # Get sessions with optional filtering
+        sessions, total = await self._get_user_sessions(
+            user_id, is_active=is_active, limit=per_page, offset=offset
+        )
 
         # Calculate total pages
         total_pages = math.ceil(total / per_page) if total > 0 else 0
