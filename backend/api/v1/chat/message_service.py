@@ -2,7 +2,9 @@ from uuid import UUID
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
+from sqlalchemy.orm import selectinload
 from models.chat_message import ChatMessage, MessageRole
+from models.uploaded_file import UploadedFile
 from common.logger import get_logger
 
 logger = get_logger(__name__)
@@ -36,7 +38,10 @@ class MessageService:
         limit: int = 50,
         offset: int = 0
     ) -> list[ChatMessage]:
-        query = select(ChatMessage).where(
+        # Load messages with their associated files
+        query = select(ChatMessage).options(
+            selectinload(ChatMessage.files)
+        ).where(
             ChatMessage.session_id == session_id
         ).order_by(ChatMessage.created_at).limit(limit).offset(offset)
         
@@ -46,13 +51,37 @@ class MessageService:
         logger.info(f"Fetched {len(messages)} messages for session {session_id}")
         return list(messages)
     
+    async def link_files_to_message(
+        self,
+        db: AsyncSession,
+        message_id: UUID,
+        file_ids: list[UUID]
+    ):
+        """Link uploaded files to a message."""
+        from sqlalchemy import update
+        
+        if not file_ids:
+            return
+        
+        await db.execute(
+            update(UploadedFile)
+            .where(UploadedFile.id.in_(file_ids))
+            .values(message_id=message_id)
+        )
+        await db.commit()
+        
+        logger.info(f"Linked {len(file_ids)} files to message {message_id}")
+    
     async def get_last_n_messages(
         self,
         db: AsyncSession,
         session_id: UUID,
         n: int = 20
     ) -> list[ChatMessage]:
-        query = select(ChatMessage).where(
+        # Load messages with their associated files
+        query = select(ChatMessage).options(
+            selectinload(ChatMessage.files)
+        ).where(
             ChatMessage.session_id == session_id
         ).order_by(desc(ChatMessage.created_at)).limit(n)
         

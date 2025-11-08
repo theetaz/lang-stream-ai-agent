@@ -9,6 +9,7 @@ class ChatSessionCreate(BaseModel):
 class ChatSessionUpdate(BaseModel):
     title: Optional[str] = None
     is_archived: Optional[bool] = None
+    is_pinned: Optional[bool] = None
 
 class ChatSessionResponse(BaseModel):
     id: UUID
@@ -16,6 +17,7 @@ class ChatSessionResponse(BaseModel):
     title: Optional[str]
     last_message_at: Optional[datetime]
     is_archived: bool
+    is_pinned: bool
     created_at: datetime
     updated_at: datetime
 
@@ -32,6 +34,11 @@ class ChatMessageResponse(BaseModel):
     content: str
     meta: Optional[dict]
     created_at: datetime
+    files: Optional[list["UploadedFileResponse"]] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Import here to avoid circular dependency
+from schemas.file import UploadedFileResponse
 

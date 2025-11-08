@@ -29,3 +29,4 @@ class ChatMessage(Base, UUIDMixin):
     created_at = Column(DateTime, nullable=False, server_default="now()")
 
     session = relationship("ChatSession", back_populates="messages")
+    files = relationship("UploadedFile", back_populates="message")

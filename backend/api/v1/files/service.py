@@ -21,7 +21,7 @@ class FileService:
         db: AsyncSession,
         user_id: int,
         file: UploadFile,
-        session_id: Optional[UUID] = None
+        session_id: UUID  # Now required
     ) -> UploadedFile:
         file_id = uuid4()
         user_dir = os.path.join(self.upload_dir, str(user_id))

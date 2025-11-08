@@ -6,7 +6,7 @@ from api.v1.files.service import file_service
 from auth.utils import get_current_user
 from common.response import APIResponse, success_response
 from database.db_client import get_db
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from models.user import User
 from schemas.file import UploadedFileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/files", tags=["files"])
 @router.post("/upload", response_model=APIResponse[UploadedFileResponse])
 async def upload_file(
     file: UploadFile = File(...),
-    session_id: Optional[UUID] = None,
+    session_id: UUID = Form(...),  # Now required as form field
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

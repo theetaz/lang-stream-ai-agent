@@ -6,7 +6,8 @@ from uuid import UUID
 class UploadedFileResponse(BaseModel):
     id: UUID
     user_id: str
-    session_id: Optional[UUID]
+    session_id: UUID
+    message_id: Optional[UUID]
     filename: str
     file_type: Optional[str]
     file_size: Optional[int]

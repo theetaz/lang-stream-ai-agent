@@ -84,7 +84,7 @@ async def create_session(
     )
 
 
-@router.get("/sessions", response_model=APIResponse[List[ChatSessionResponse]])
+@router.get("/sessions", response_model=APIResponse[dict])
 async def get_sessions(
     archived: bool = False,
     limit: int = 50,
@@ -92,9 +92,21 @@ async def get_sessions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    sessions = await session_service.get_sessions(db, current_user.id, archived, limit, offset)
+    sessions, total = await session_service.get_sessions(db, current_user.id, archived, limit, offset)
+    total_pages = (total + limit - 1) // limit if limit > 0 else 0
+    current_page = (offset // limit) + 1 if limit > 0 else 1
+    
     return success_response(
-        [ChatSessionResponse.model_validate(s) for s in sessions],
+        {
+            "items": [ChatSessionResponse.model_validate(s) for s in sessions],
+            "pagination": {
+                "total": total,
+                "page": current_page,
+                "per_page": limit,
+                "total_pages": total_pages,
+                "offset": offset
+            }
+        },
         message="Sessions fetched successfully"
     )
 
@@ -119,12 +131,12 @@ async def update_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if data.title:
-        session = await session_service.update_title(db, session_id, current_user.id, data.title)
-    elif data.is_archived is not None:
-        session = await session_service.archive_session(db, session_id, current_user.id)
-    else:
-        session = await session_service.get_session(db, session_id, current_user.id)
+    session = await session_service.update_session(
+        db, session_id, current_user.id,
+        title=data.title,
+        is_archived=data.is_archived,
+        is_pinned=data.is_pinned
+    )
     
     return success_response(
         ChatSessionResponse.model_validate(session),

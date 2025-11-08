@@ -15,6 +15,7 @@ class ChatSession(Base, UUIDMixin, TimestampMixin):
     title = Column(String(255), nullable=True)
     last_message_at = Column(DateTime, nullable=True)
     is_archived = Column(Boolean, default=False, nullable=False)
+    is_pinned = Column(Boolean, default=False, nullable=False, index=True)
 
     user = relationship("User", back_populates="chat_sessions")
     messages = relationship(

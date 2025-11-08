@@ -37,17 +37,30 @@ class SessionService:
         archived: bool = False,
         limit: int = 50,
         offset: int = 0
-    ) -> list[ChatSession]:
+    ) -> tuple[list[ChatSession], int]:
+        # Count total sessions
+        count_query = select(func.count(ChatSession.id)).where(
+            ChatSession.user_id == user_id,
+            ChatSession.is_archived == archived
+        )
+        count_result = await db.execute(count_query)
+        total = count_result.scalar() or 0
+        
+        # Get sessions ordered by pinned first, then by last_message_at
         query = select(ChatSession).where(
             ChatSession.user_id == user_id,
             ChatSession.is_archived == archived
-        ).order_by(desc(ChatSession.last_message_at), desc(ChatSession.created_at)).limit(limit).offset(offset)
+        ).order_by(
+            desc(ChatSession.is_pinned),  # Pinned sessions first
+            desc(ChatSession.last_message_at),
+            desc(ChatSession.created_at)
+        ).limit(limit).offset(offset)
         
         result = await db.execute(query)
         sessions = result.scalars().all()
         
-        logger.info(f"Fetched {len(sessions)} sessions for user {user_id}")
-        return list(sessions)
+        logger.info(f"Fetched {len(sessions)} sessions (total: {total}) for user {user_id}")
+        return list(sessions), total
     
     async def get_session(
         self,
@@ -67,6 +80,30 @@ class SessionService:
         
         return session
     
+    async def update_session(
+        self,
+        db: AsyncSession,
+        session_id: UUID,
+        user_id: int,
+        title: Optional[str] = None,
+        is_archived: Optional[bool] = None,
+        is_pinned: Optional[bool] = None
+    ) -> ChatSession:
+        session = await self.get_session(db, session_id, user_id)
+        
+        if title is not None:
+            session.title = title
+        if is_archived is not None:
+            session.is_archived = is_archived
+        if is_pinned is not None:
+            session.is_pinned = is_pinned
+        
+        await db.commit()
+        await db.refresh(session)
+        
+        logger.info(f"Updated session {session_id}")
+        return session
+    
     async def update_title(
         self,
         db: AsyncSession,
@@ -74,13 +111,7 @@ class SessionService:
         user_id: int,
         title: str
     ) -> ChatSession:
-        session = await self.get_session(db, session_id, user_id)
-        session.title = title
-        await db.commit()
-        await db.refresh(session)
-        
-        logger.info(f"Updated title for session {session_id}")
-        return session
+        return await self.update_session(db, session_id, user_id, title=title)
     
     async def update_last_message_at(
         self,

@@ -22,7 +22,13 @@ class UploadedFile(Base, UUIDMixin):
     )
     session_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("chat_sessions.id", ondelete="SET NULL"),
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    message_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("chat_messages.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -37,6 +43,7 @@ class UploadedFile(Base, UUIDMixin):
 
     user = relationship("User", back_populates="uploaded_files")
     session = relationship("ChatSession", back_populates="files")
+    message = relationship("ChatMessage", back_populates="files")
     chunks = relationship(
         "FileChunk", back_populates="file", cascade="all, delete-orphan"
     )

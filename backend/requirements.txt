@@ -69,6 +69,8 @@ langchain-text-splitters==1.0.0
 langgraph>=1.0.2
 langgraph-checkpoint>=2.1.2
 langgraph-checkpoint-postgres>=3.0.0
+# Note: AsyncPostgresStore is included in langgraph-checkpoint-postgres package
+# The store functionality is part of the checkpoint package, no separate package needed
 langgraph-prebuilt>=1.0.2
 langgraph-sdk==0.2.9
 langsmith==0.4.38

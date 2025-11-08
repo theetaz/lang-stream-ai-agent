@@ -27,11 +27,19 @@ class ChatService:
         Streams tokens and tool call events in real-time.
         """
         try:
-            # Save user message to database if session_id provided
+            # Load previous messages for context if session_id provided
+            previous_messages = []
             if session_id and db:
-                await message_service.save_message(
+                # Get last 20 messages for context
+                previous_messages = await message_service.get_last_n_messages(db, session_id, n=20)
+            
+            # Save user message to database if session_id provided
+            user_message_id = None
+            if session_id and db:
+                user_message = await message_service.save_message(
                     db, session_id, MessageRole.USER, user_input
                 )
+                user_message_id = user_message.id
                 await session_service.update_last_message_at(db, session_id)
             
             # Send initial connection confirmation
@@ -45,7 +53,8 @@ class ChatService:
                 user_input,
                 session_id=session_id,
                 user_id=user_id,
-                use_checkpointing=bool(session_id)
+                use_checkpointing=bool(session_id),
+                previous_messages=previous_messages if not bool(session_id) else None  # Only load if checkpointing disabled
             ):
                 event_type = event.get("type")
                 event_data = event.get("data", {})

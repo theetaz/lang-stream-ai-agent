@@ -2,11 +2,13 @@ from typing import AsyncIterator, Literal, Optional
 from uuid import UUID
 
 from config.settings import settings
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.store.base import BaseStore
 
 
 def get_llm():
@@ -100,36 +102,101 @@ def should_continue(state: MessagesState) -> Literal["tools", END]:
     return END
 
 
-def call_model(state: MessagesState):
-    """Call the OpenAI model with tools"""
-    from langchain_core.messages import SystemMessage
+async def call_model(
+    state: MessagesState,
+    config: RunnableConfig,
+    *,
+    store: Optional[BaseStore] = None
+):
+    """
+    Call the OpenAI model with tools and long-term memory support.
     
+    Args:
+        state: Current graph state with messages
+        config: Runnable config containing user_id and thread_id
+        store: Optional store for long-term memory access
+    """
     tools = get_tools(include_memory=True)
     llm = get_llm()
     llm_with_tools = llm.bind_tools(tools)
 
     # Add system message if not already present
     messages = state["messages"]
+    
+    # Retrieve relevant memories from long-term store if available
+    memory_context = ""
+    if store and config and config.get("configurable"):
+        user_id = config["configurable"].get("user_id")
+        if user_id:
+            try:
+                # Namespace memories by user_id
+                namespace = (str(user_id), "memories")
+                
+                # Search for relevant memories based on the last user message
+                if messages:
+                    last_message_content = str(messages[-1].content) if hasattr(messages[-1], "content") else ""
+                    if last_message_content:
+                        memories = await store.asearch(
+                            namespace,
+                            query=last_message_content,
+                            limit=3
+                        )
+                        
+                        if memories:
+                            memory_texts = []
+                            for mem in memories:
+                                mem_value = mem.value if hasattr(mem, "value") else mem
+                                if isinstance(mem_value, dict):
+                                    content = mem_value.get("content") or mem_value.get("text") or str(mem_value)
+                                    memory_type = mem_value.get("memory_type", "")
+                                    if memory_type:
+                                        memory_texts.append(f"[{memory_type}] {content}")
+                                    else:
+                                        memory_texts.append(content)
+                            
+                            if memory_texts:
+                                memory_context = "\n## User Memories\n" + "\n".join(memory_texts)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to retrieve memories: {e}")
+    
+    # Build system message with memory context
+    system_content = (
+        "You are a helpful AI assistant with access to tools. "
+        "When users upload files or ask about documents, you MUST use the search_user_documents tool to find information in their files. "
+        "When users ask questions requiring current information, use tavily_search. "
+        "Always provide detailed, helpful responses based on the information you find."
+    )
+    
+    if memory_context:
+        system_content += memory_context
+    
     if not messages or not isinstance(messages[0], SystemMessage):
-        system_msg = SystemMessage(
-            content="You are a helpful AI assistant with access to tools. "
-            "When users upload files or ask about documents, you MUST use the search_user_documents tool to find information in their files. "
-            "When users ask questions requiring current information, use tavily_search. "
-            "Always provide detailed, helpful responses based on the information you find."
-        )
+        system_msg = SystemMessage(content=system_content)
         messages = [system_msg] + messages
+    else:
+        # Update existing system message with memory context
+        messages[0] = SystemMessage(content=system_content)
 
-    response = llm_with_tools.invoke(messages)
+    response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
 
-def get_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
+def get_graph(
+    checkpointer: Optional[BaseCheckpointSaver] = None,
+    store: Optional[BaseStore] = None
+):
     """
-    Create and compile the LangGraph with tool calling support.
+    Create and compile the LangGraph with tool calling support and memory.
 
     Graph structure:
     START -> call_model -> [should_continue] -> tools -> call_model -> END
                                               -> END
+    
+    Args:
+        checkpointer: Optional checkpointer for short-term memory (session state)
+        store: Optional store for long-term memory (cross-session memories)
     """
     tools = get_tools(include_memory=True)
     tool_node = ToolNode(tools)
@@ -152,39 +219,69 @@ def get_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
     # After tools, always go back to call_model
     graph.add_edge("tools", "call_model")
 
-    return graph.compile(checkpointer=checkpointer)
+    # Compile with both checkpointer (short-term) and store (long-term)
+    return graph.compile(checkpointer=checkpointer, store=store)
 
 
 async def stream_graph(
     user_input: str,
     session_id: Optional[UUID] = None,
     user_id: Optional[int] = None,
-    use_checkpointing: bool = False
+    use_checkpointing: bool = False,
+    previous_messages: Optional[list] = None
 ) -> AsyncIterator[dict]:
     """
     Stream the graph response with tool calls and tokens.
     Yields events as dictionaries with type and data.
+    
+    Args:
+        user_input: Current user message
+        session_id: Optional session ID for checkpointing
+        user_id: Optional user ID for long-term memory
+        use_checkpointing: Whether to use checkpointing (loads previous state automatically)
+        previous_messages: Optional list of previous messages to include if checkpointing disabled
     """
     import logging
+    from langchain_core.messages import AIMessage
+    from models.chat_message import MessageRole
 
     logger = logging.getLogger(__name__)
 
+    # Get checkpointer for short-term memory (session state)
     checkpointer = None
     if use_checkpointing and session_id:
         from database.checkpoint_pool import get_async_checkpointer
         checkpointer = await get_async_checkpointer()
     
-    graph = get_graph(checkpointer=checkpointer)
+    # Get store for long-term memory (cross-session memories)
+    store = None
+    if user_id:
+        from database.store_pool import get_async_store
+        store = await get_async_store()
+    
+    graph = get_graph(checkpointer=checkpointer, store=store)
 
     # Create input with proper message format
-    input_data = {"messages": [HumanMessage(content=user_input)]}
+    # If checkpointing is disabled but we have previous messages, include them
+    messages = []
+    if not use_checkpointing and previous_messages:
+        # Convert database messages to LangChain messages
+        for msg in previous_messages:
+            if msg.role == MessageRole.USER:
+                messages.append(HumanMessage(content=msg.content))
+            elif msg.role == MessageRole.ASSISTANT:
+                messages.append(AIMessage(content=msg.content))
     
-    # Create config with thread_id for checkpointing
+    # Add current user message
+    messages.append(HumanMessage(content=user_input))
+    input_data = {"messages": messages}
+    
+    # Create config with thread_id for checkpointing and user_id for long-term memory
     config = {}
-    if session_id and checkpointer:
+    if session_id or user_id:
         config = {
             "configurable": {
-                "thread_id": str(session_id),
+                "thread_id": str(session_id) if session_id else None,
                 "user_id": str(user_id) if user_id else None
             }
         }
