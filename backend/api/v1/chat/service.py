@@ -4,11 +4,12 @@ from typing import AsyncIterator, Optional
 from uuid import UUID
 
 from agents.langgraph_agent import get_graph, stream_graph
-from schemas.chat import ChatRequest, ChatResponse
+
 # Checkpointer is now loaded lazily within stream_graph
 from api.v1.chat.message_service import message_service
 from api.v1.chat.session_service import session_service
 from models.chat_message import MessageRole
+from schemas.chat import ChatRequest, ChatResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -16,11 +17,11 @@ class ChatService:
     """Service for chat operations."""
 
     async def event_stream(
-        self, 
+        self,
         user_input: str,
         session_id: Optional[UUID] = None,
         user_id: Optional[UUID] = None,
-        db: Optional[AsyncSession] = None
+        db: Optional[AsyncSession] = None,
     ) -> AsyncIterator[str]:
         """
         Generate Server-Sent Events stream for chat responses.
@@ -31,8 +32,10 @@ class ChatService:
             previous_messages = []
             if session_id and db:
                 # Get last 20 messages for context
-                previous_messages = await message_service.get_last_n_messages(db, session_id, n=20)
-            
+                previous_messages = await message_service.get_last_n_messages(
+                    db, session_id, n=20
+                )
+
             # Save user message to database if session_id provided
             user_message_id = None
             if session_id and db:
@@ -41,7 +44,7 @@ class ChatService:
                 )
                 user_message_id = user_message.id
                 await session_service.update_last_message_at(db, session_id)
-            
+
             # Send initial connection confirmation
             yield f": connected\n\n"
 
@@ -54,7 +57,9 @@ class ChatService:
                 session_id=session_id,
                 user_id=user_id,
                 use_checkpointing=bool(session_id),
-                previous_messages=previous_messages if not bool(session_id) else None  # Only load if checkpointing disabled
+                previous_messages=(
+                    previous_messages if not bool(session_id) else None
+                ),  # Only load if checkpointing disabled
             ):
                 event_type = event.get("type")
                 event_data = event.get("data", {})
@@ -133,12 +138,51 @@ class ChatService:
                     db, session_id, MessageRole.ASSISTANT, assistant_response
                 )
                 await session_service.update_last_message_at(db, session_id)
-                
+
+                MAX_MESSAGE_COUNT_THRESHOLD = 2
+                # Generate or update title if needed
                 message_count = await message_service.count_messages(db, session_id)
-                if message_count == 3:
+                session = await session_service.get_session(db, session_id, user_id)
+
+                # Generate title if:
+                # 1. Session still has default title ("New Chat") OR
+                # 2. Message count is 3 (first title generation) OR
+                # 3. Message count is a multiple of 10 (periodic updates)
+                should_generate_title = (
+                    (session.title is None or session.title == "New Chat")
+                    or message_count == MAX_MESSAGE_COUNT_THRESHOLD
+                    or (
+                        message_count > MAX_MESSAGE_COUNT_THRESHOLD
+                        and message_count % 10 == 0
+                    )
+                )
+
+                if should_generate_title:
                     from api.v1.chat.title_service import title_generator
-                    asyncio.create_task(title_generator.generate_title(db, session_id, user_id))
-            
+
+                    # Generate title in background task with proper error handling
+                    async def generate_title_task():
+                        try:
+                            # Create a new db session for the background task
+                            from database.db_client import AsyncSessionLocal
+
+                            async with AsyncSessionLocal() as bg_db:
+                                await title_generator.generate_title(
+                                    bg_db, session_id, user_id
+                                )
+                        except Exception as e:
+                            import traceback
+
+                            from common.logger import get_logger
+
+                            logger = get_logger(__name__)
+                            logger.error(
+                                f"Failed to generate title for session {session_id}: {e}\n{traceback.format_exc()}"
+                            )
+
+                    # Run in background without blocking the response
+                    asyncio.create_task(generate_title_task())
+
             # Send completion event
             yield f"data: {json.dumps({'type': 'done', 'total_tokens': token_count})}\n\n"
 
