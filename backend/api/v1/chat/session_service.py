@@ -145,11 +145,24 @@ class SessionService:
         session_id: UUID,
         user_id: UUID
     ):
+        from models.uploaded_file import UploadedFile
+        
         session = await self.get_session(db, session_id, user_id)
+        
+        # Delete related files first to avoid foreign key constraint issues
+        # SQLAlchemy tries to set session_id to NULL before CASCADE delete
+        files_query = select(UploadedFile).where(UploadedFile.session_id == session_id)
+        files_result = await db.execute(files_query)
+        files = files_result.scalars().all()
+        
+        for file in files:
+            await db.delete(file)
+        
+        # Now delete the session
         await db.delete(session)
         await db.commit()
         
-        logger.info(f"Deleted session {session_id}")
+        logger.info(f"Deleted session {session_id} and {len(files)} associated files")
 
 session_service = SessionService()
 
