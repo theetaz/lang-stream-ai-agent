@@ -1,5 +1,6 @@
 from typing import AsyncIterator, Literal, Optional
 from uuid import UUID
+from contextvars import ContextVar
 
 from config.settings import settings
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -10,6 +11,9 @@ from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
 from langgraph.graph.message import add_messages
+
+# Context variable to store config for tools to access
+_graph_config: ContextVar[Optional[RunnableConfig]] = ContextVar("graph_config", default=None)
 
 
 def get_llm():
@@ -200,13 +204,19 @@ async def tools_node_with_config(state: MessagesState, config: RunnableConfig):
             user_id = configurable.get("user_id") if isinstance(configurable, dict) else None
             logger.info(f"Extracted user_id from config in tools_node: {user_id}")
     
-    tools = get_tools(include_memory=True)
-    tool_node = ToolNode(tools)
+    # Store config in context variable so tools can access it
+    _graph_config.set(config)
     
-    # Bind config to tools by creating a runnable with config
-    # The ToolNode will use the config from the graph context
-    result = await tool_node.ainvoke(state, config)
-    return result
+    try:
+        tools = get_tools(include_memory=True)
+        tool_node = ToolNode(tools)
+        
+        # Invoke with config - ToolNode should pass config to tools
+        result = await tool_node.ainvoke(state, config)
+        return result
+    finally:
+        # Clear context variable after use
+        _graph_config.set(None)
 
 
 def get_graph(
