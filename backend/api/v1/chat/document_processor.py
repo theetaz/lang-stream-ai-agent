@@ -8,8 +8,13 @@ from models.file_chunk import FileChunk
 from common.logger import get_logger
 import traceback
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 logger = get_logger(__name__)
+
+# Thread pool executor for CPU-intensive operations
+_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="doc_processor")
 
 class DocumentProcessor:
     async def process_file(self, file_id: UUID):
@@ -42,24 +47,65 @@ class DocumentProcessor:
                 logger.info(f"File {file_id} status updated to PROCESSING")
                 
                 # Extract text from document
+                # Run Docling conversion in thread pool to avoid blocking event loop
+                def convert_with_docling(file_path: str) -> str:
+                    """Synchronous Docling conversion function to run in thread pool."""
+                    from docling.document_converter import DocumentConverter
+                    from docling.datamodel.base_models import InputFormat
+                    from docling.datamodel.pipeline_options import PdfPipelineOptions
+                    
+                    # Configure pipeline options for faster processing
+                    pipeline_options = PdfPipelineOptions()
+                    pipeline_options.do_ocr = False  # Disable OCR for faster processing (only if text is already extractable)
+                    pipeline_options.do_table_structure = False  # Disable table structure detection for speed
+                    pipeline_options.do_table_cell_matching = False
+                    
+                    # Create converter with optimized options
+                    converter = DocumentConverter(
+                        format_options={
+                            InputFormat.PDF: pipeline_options
+                        }
+                    )
+                    conv_result = converter.convert(file_path)
+                    return conv_result.document.export_to_markdown()
+                
+                def read_as_text(file_path: str) -> str:
+                    """Fallback: read file as text."""
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        return f.read()
+                
+                markdown = None
                 try:
                     logger.info(f"Attempting to convert file with Docling: {file.filename}")
-                    from docling.document_converter import DocumentConverter
-                    converter = DocumentConverter()
-                    conv_result = converter.convert(file.file_path)
-                    markdown = conv_result.document.export_to_markdown()
+                    # Run in thread pool with timeout
+                    loop = asyncio.get_event_loop()
+                    markdown = await asyncio.wait_for(
+                        loop.run_in_executor(_executor, convert_with_docling, file.file_path),
+                        timeout=300.0  # 5 minute timeout
+                    )
                     logger.info(f"Docling conversion successful. Text length: {len(markdown)}")
                 except ImportError as e:
                     logger.warning(f"Docling not available ({e}), reading file as text")
-                    with open(file.file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        markdown = f.read()
+                    loop = asyncio.get_event_loop()
+                    markdown = await loop.run_in_executor(_executor, read_as_text, file.file_path)
                     logger.info(f"Read file as text. Length: {len(markdown)}")
+                except asyncio.TimeoutError:
+                    logger.error(f"Docling conversion timed out after 5 minutes for file {file_id}")
+                    file.processing_status = ProcessingStatus.FAILED
+                    await db.commit()
+                    return
                 except Exception as e:
-                    logger.error(f"Docling conversion failed: {e}")
+                    logger.error(f"Docling conversion failed: {e}\n{traceback.format_exc()}")
                     logger.warning("Falling back to text reading")
-                    with open(file.file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        markdown = f.read()
-                    logger.info(f"Fallback text reading successful. Length: {len(markdown)}")
+                    try:
+                        loop = asyncio.get_event_loop()
+                        markdown = await loop.run_in_executor(_executor, read_as_text, file.file_path)
+                        logger.info(f"Fallback text reading successful. Length: {len(markdown)}")
+                    except Exception as fallback_error:
+                        logger.error(f"Fallback text reading also failed: {fallback_error}")
+                        file.processing_status = ProcessingStatus.FAILED
+                        await db.commit()
+                        return
                 
                 # Sanitize text: remove null bytes (PostgreSQL can't handle them)
                 markdown = markdown.replace('\x00', '')
