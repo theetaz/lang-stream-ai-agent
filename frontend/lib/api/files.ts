@@ -14,12 +14,15 @@ export async function uploadFile(
     throw new Error("Not authenticated. Please log in again.");
   }
 
+  if (!sessionId) {
+    throw new Error("Session ID is required for file upload");
+  }
+
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("session_id", sessionId);
 
-  const url = sessionId
-    ? `${API_URL}/api/v1/files/upload?session_id=${sessionId}`
-    : `${API_URL}/api/v1/files/upload`;
+  const url = `${API_URL}/api/v1/files/upload`;
 
   const response = await fetch(url, {
     method: "POST",
