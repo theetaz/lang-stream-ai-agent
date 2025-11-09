@@ -284,6 +284,9 @@ export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
       setCurrentSessionId(sessionId);
       router.push(`/chat/${sessionId}`);
     } else {
+      // Navigate to landing page and clear current session
+      setCurrentSessionId(null);
+      setMessages([]);
       router.push("/");
     }
   };

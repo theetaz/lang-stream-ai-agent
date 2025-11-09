@@ -149,14 +149,9 @@ class ChatService:
                 # 2. Message count is 3 (first title generation) OR
                 # 3. Message count is a multiple of 10 (periodic updates)
                 should_generate_title = (
-                    (session.title is None)
-                    or message_count == MAX_MESSAGE_COUNT_THRESHOLD
-                    or (
-                        message_count > MAX_MESSAGE_COUNT_THRESHOLD
-                        and message_count % 10 == 0
-                    )
+                    message_count == MAX_MESSAGE_COUNT_THRESHOLD
+                    or (message_count > MAX_MESSAGE_COUNT_THRESHOLD)
                 )
-
                 if should_generate_title:
                     from api.v1.chat.title_service import title_generator
 

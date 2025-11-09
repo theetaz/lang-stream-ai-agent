@@ -39,11 +39,13 @@ export function SessionSidebar({
 
   const deleteMutation = useMutation({
     mutationFn: (sessionId: string) => deleteSession(sessionId),
-    onSuccess: () => {
+    onSuccess: (_, deletedSessionId) => {
       queryClient.invalidateQueries({ queryKey: ["sessions"] })
-      if (currentSessionId) {
+      // If the deleted session is the current one, navigate to landing page
+      if (currentSessionId === deletedSessionId) {
         onSessionSelect(null)
       }
+      // Otherwise, stay on current page (landing or another chat session)
     },
   })
 
