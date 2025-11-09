@@ -52,10 +52,14 @@ export function ChatLandingPage({ user }: ChatLandingPageProps) {
     e.preventDefault();
     if (!input.trim()) return;
 
+    const messageToSend = input.trim();
+    
     try {
       const response = await createSessionMutation.mutateAsync();
       if (response.data) {
-        router.push(`/chat/${response.data.id}?message=${encodeURIComponent(input.trim())}`);
+        // Store message in sessionStorage for the chat page to pick up
+        sessionStorage.setItem(`pending_message_${response.data.id}`, messageToSend);
+        router.push(`/chat/${response.data.id}`);
       }
     } catch (error) {
       console.error("Failed to create session:", error);
@@ -64,10 +68,13 @@ export function ChatLandingPage({ user }: ChatLandingPageProps) {
 
   const handleSuggestionClick = async (suggestion: string) => {
     setInput(suggestion);
+    
     try {
       const response = await createSessionMutation.mutateAsync();
       if (response.data) {
-        router.push(`/chat/${response.data.id}?message=${encodeURIComponent(suggestion)}`);
+        // Store message in sessionStorage for the chat page to pick up
+        sessionStorage.setItem(`pending_message_${response.data.id}`, suggestion);
+        router.push(`/chat/${response.data.id}`);
       }
     } catch (error) {
       console.error("Failed to create session:", error);

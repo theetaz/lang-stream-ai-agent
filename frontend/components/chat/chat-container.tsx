@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage, type Message } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
@@ -28,16 +28,21 @@ interface ChatContainerProps {
 
 export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(initialSessionId || null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingToolCalls, setStreamingToolCalls] = useState<ToolCallData[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isNewSession, setIsNewSession] = useState(false);
+  const [pendingMessageSent, setPendingMessageSent] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Reset pending message flag when session ID changes
+  useEffect(() => {
+    setPendingMessageSent(false);
+  }, [currentSessionId]);
 
   // Load message history when session changes (but not for new sessions)
   useEffect(() => {
@@ -64,6 +69,13 @@ export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
           timestamp: new Date(msg.created_at),
         }));
         setMessages(historyMessages);
+        
+        // If there are existing messages, mark pending message as sent to avoid duplicate
+        if (historyMessages.length > 0) {
+          const pendingMessageKey = `pending_message_${sessionId}`;
+          sessionStorage.removeItem(pendingMessageKey);
+          setPendingMessageSent(true);
+        }
       }
     } catch (error) {
       console.error("Failed to load session history:", error);
@@ -192,6 +204,8 @@ export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
         return;
       }
       sessionId = response.data.id;
+      setCurrentSessionId(sessionId);
+      setIsNewSession(true);
     }
 
     // Upload files first if any
@@ -234,26 +248,40 @@ export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
     }, 100);
   };
 
-  // Handle initial message from URL query param
+  // Handle pending message from sessionStorage (set by landing page)
   useEffect(() => {
-    const initialMessage = searchParams?.get("message");
-    if (initialMessage && currentSessionId && messages.length === 0 && !isLoadingHistory) {
-      // Send message after a short delay to ensure session is loaded
+    if (!currentSessionId || pendingMessageSent) return;
+    
+    // Wait for history loading to complete
+    if (isLoadingHistory) return;
+    
+    const pendingMessageKey = `pending_message_${currentSessionId}`;
+    const pendingMessage = sessionStorage.getItem(pendingMessageKey);
+    
+    // Only send if we have a pending message and no existing messages
+    if (pendingMessage && messages.length === 0) {
+      // Clear the pending message from storage immediately to prevent duplicate sends
+      sessionStorage.removeItem(pendingMessageKey);
+      setPendingMessageSent(true);
+      
+      // Send the message after a short delay to ensure everything is ready
       setTimeout(() => {
-        handleSendMessage(initialMessage);
-        // Remove message from URL
-        router.replace(`/chat/${currentSessionId}`, { scroll: false });
-      }, 500);
+        handleSendMessage(pendingMessage);
+      }, 300);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSessionId, searchParams, messages.length, isLoadingHistory]);
+  }, [currentSessionId, messages.length, isLoadingHistory, pendingMessageSent]);
 
   const handleNewSession = () => {
     router.push("/");
   };
 
   const handleSessionSelect = (sessionId: string | null) => {
+    // Reset pending message flag when switching sessions
+    setPendingMessageSent(false);
+    
     if (sessionId) {
+      setCurrentSessionId(sessionId);
       router.push(`/chat/${sessionId}`);
     } else {
       router.push("/");

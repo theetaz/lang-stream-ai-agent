@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
 interface ChatPageProps {
-  params: {
+  params: Promise<{
     sessionId: string;
-  };
+  }>;
 }
 
 export default async function ChatPage({ params }: ChatPageProps) {
@@ -16,11 +16,13 @@ export default async function ChatPage({ params }: ChatPageProps) {
     redirect("/login");
   }
 
+  const { sessionId } = await params;
+
   const user = {
     name: "User",
     email: "",
   };
 
-  return <ChatContainer user={user} initialSessionId={params.sessionId} />;
+  return <ChatContainer user={user} initialSessionId={sessionId} />;
 }
 
