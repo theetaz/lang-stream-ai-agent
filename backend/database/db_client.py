@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 # Async database setup (default)
 async_engine = create_async_engine(
     settings.async_database_url,
-    echo=settings.ENVIRONMENT == "development",
+    echo=False,  # Set to True to enable SQL query logging
     pool_size=5,  # Number of connections to maintain
     max_overflow=10,  # Maximum number of connections beyond pool_size
     pool_pre_ping=True,  # Verify connections are alive before using
@@ -27,7 +27,7 @@ AsyncSessionLocal = async_sessionmaker(
 # Sync database setup (available if needed)
 sync_engine = create_engine(
     settings.database_url,
-    echo=settings.ENVIRONMENT == "development",
+    echo=False,
     pool_size=5,
     max_overflow=10,
     pool_pre_ping=True,

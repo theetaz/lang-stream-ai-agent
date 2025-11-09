@@ -11,9 +11,6 @@ export function ChatEmptyState() {
         </div>
         <div className="space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">What can I help with?</h2>
-          <p className="text-muted-foreground">
-            Ask me anything and I'll do my best to help you.
-          </p>
         </div>
       </div>
     </div>

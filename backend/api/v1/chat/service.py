@@ -139,7 +139,7 @@ class ChatService:
                 )
                 await session_service.update_last_message_at(db, session_id)
 
-                MAX_MESSAGE_COUNT_THRESHOLD = 2
+                MAX_MESSAGE_COUNT_THRESHOLD = 3
                 # Generate or update title if needed
                 message_count = await message_service.count_messages(db, session_id)
                 session = await session_service.get_session(db, session_id, user_id)
@@ -149,7 +149,7 @@ class ChatService:
                 # 2. Message count is 3 (first title generation) OR
                 # 3. Message count is a multiple of 10 (periodic updates)
                 should_generate_title = (
-                    (session.title is None or session.title == "New Chat")
+                    (session.title is None)
                     or message_count == MAX_MESSAGE_COUNT_THRESHOLD
                     or (
                         message_count > MAX_MESSAGE_COUNT_THRESHOLD

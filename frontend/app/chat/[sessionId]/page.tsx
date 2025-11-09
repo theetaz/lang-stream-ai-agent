@@ -1,8 +1,14 @@
-import { ChatLandingPage } from "@/components/chat/chat-landing-page";
+import { ChatContainer } from "@/components/chat/chat-container";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
-export default async function HomePage() {
+interface ChatPageProps {
+  params: {
+    sessionId: string;
+  };
+}
+
+export default async function ChatPage({ params }: ChatPageProps) {
   const cookieStore = await cookies();
   const backendToken = cookieStore.get("backend_access_token");
 
@@ -15,6 +21,6 @@ export default async function HomePage() {
     email: "",
   };
 
-  return <ChatLandingPage user={user} />;
+  return <ChatContainer user={user} initialSessionId={params.sessionId} />;
 }
 

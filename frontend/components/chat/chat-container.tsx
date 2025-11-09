@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage, type Message } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
@@ -22,10 +23,13 @@ interface ChatContainerProps {
     email?: string;
     image?: string;
   };
+  initialSessionId?: string;
 }
 
-export function ChatContainer({ user }: ChatContainerProps) {
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(initialSessionId || null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [streamingToolCalls, setStreamingToolCalls] = useState<ToolCallData[]>([]);
@@ -85,6 +89,7 @@ export function ChatContainer({ user }: ChatContainerProps) {
         setIsNewSession(true);
         setCurrentSessionId(data.data.id);
         queryClient.invalidateQueries({ queryKey: ["sessions"] });
+        router.push(`/chat/${data.data.id}`);
       }
     },
   });
@@ -229,17 +234,35 @@ export function ChatContainer({ user }: ChatContainerProps) {
     }, 100);
   };
 
+  // Handle initial message from URL query param
+  useEffect(() => {
+    const initialMessage = searchParams?.get("message");
+    if (initialMessage && currentSessionId && messages.length === 0 && !isLoadingHistory) {
+      // Send message after a short delay to ensure session is loaded
+      setTimeout(() => {
+        handleSendMessage(initialMessage);
+        // Remove message from URL
+        router.replace(`/chat/${currentSessionId}`, { scroll: false });
+      }, 500);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSessionId, searchParams, messages.length, isLoadingHistory]);
+
   const handleNewSession = () => {
-    setCurrentSessionId(null);
-    setMessages([]);
+    router.push("/");
   };
 
   const handleSessionSelect = (sessionId: string | null) => {
-    setCurrentSessionId(sessionId);
+    if (sessionId) {
+      router.push(`/chat/${sessionId}`);
+    } else {
+      router.push("/");
+    }
   };
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Sessions Sidebar on Left */}
       <SessionSidebar
         currentSessionId={currentSessionId}
         onSessionSelect={handleSessionSelect}
