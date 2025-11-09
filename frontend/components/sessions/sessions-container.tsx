@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, LogOut } from "lucide-react";
 import { SessionsList } from "./sessions-list";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getSessions, removeSession, removeAllSessions } from "@/lib/api/sessions";
-import { getCurrentSessionId, getBackendAccessToken } from "@/lib/auth-client";
+import { getUserSessions, deleteSession, deleteAllSessions, getCurrentSessionId, getBackendAccessToken } from "@/lib/auth-client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -18,24 +17,23 @@ export function SessionsContainer() {
   const currentSessionId = getCurrentSessionId();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["sessions"],
+    queryKey: ["auth-sessions"],
     queryFn: async () => {
       if (!token) throw new Error("No token");
-      const response = await getSessions(token);
-      return response.data?.sessions || [];
+      return await getUserSessions();
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (sessionId: string) => {
       if (!token) throw new Error("No token");
-      return removeSession(token, sessionId);
+      return await deleteSession(sessionId);
     },
     onMutate: (sessionId) => {
       setDeleting(sessionId);
     },
     onSuccess: (_, sessionId) => {
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["auth-sessions"] });
       if (sessionId === currentSessionId) {
         window.location.href = "/login";
       }
@@ -48,7 +46,7 @@ export function SessionsContainer() {
   const deleteAllMutation = useMutation({
     mutationFn: async () => {
       if (!token) throw new Error("No token");
-      return removeAllSessions(token);
+      return await deleteAllSessions();
     },
     onSuccess: () => {
       window.location.href = "/login";
