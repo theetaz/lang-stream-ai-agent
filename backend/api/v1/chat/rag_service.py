@@ -14,7 +14,7 @@ class RAGService:
     async def search_documents(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: UUID,
         query: str,
         session_id: Optional[UUID] = None,
         limit: int = 5

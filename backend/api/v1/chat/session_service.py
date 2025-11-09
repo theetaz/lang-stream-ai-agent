@@ -15,7 +15,7 @@ class SessionService:
     async def create_session(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: UUID,
         title: Optional[str] = None
     ) -> ChatSession:
         session = ChatSession(
@@ -33,7 +33,7 @@ class SessionService:
     async def get_sessions(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: UUID,
         archived: bool = False,
         limit: int = 50,
         offset: int = 0
@@ -66,7 +66,7 @@ class SessionService:
         self,
         db: AsyncSession,
         session_id: UUID,
-        user_id: int
+        user_id: UUID
     ) -> ChatSession:
         query = select(ChatSession).where(
             ChatSession.id == session_id,
@@ -84,7 +84,7 @@ class SessionService:
         self,
         db: AsyncSession,
         session_id: UUID,
-        user_id: int,
+        user_id: UUID,
         title: Optional[str] = None,
         is_archived: Optional[bool] = None,
         is_pinned: Optional[bool] = None
@@ -108,7 +108,7 @@ class SessionService:
         self,
         db: AsyncSession,
         session_id: UUID,
-        user_id: int,
+        user_id: UUID,
         title: str
     ) -> ChatSession:
         return await self.update_session(db, session_id, user_id, title=title)
@@ -129,7 +129,7 @@ class SessionService:
         self,
         db: AsyncSession,
         session_id: UUID,
-        user_id: int
+        user_id: UUID
     ) -> ChatSession:
         session = await self.get_session(db, session_id, user_id)
         session.is_archived = True
@@ -143,7 +143,7 @@ class SessionService:
         self,
         db: AsyncSession,
         session_id: UUID,
-        user_id: int
+        user_id: UUID
     ):
         session = await self.get_session(db, session_id, user_id)
         await db.delete(session)

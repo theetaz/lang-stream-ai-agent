@@ -1,3 +1,4 @@
+from uuid import UUID
 from typing import Literal, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from common.embedding_service import embedding_service
@@ -17,7 +18,7 @@ class MemoryService:
     async def save_semantic_memory(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: UUID,
         memory_id: str,
         content: str,
         memory_type: Literal["fact", "preference", "context", "relationship"],
@@ -39,7 +40,7 @@ class MemoryService:
     async def search_semantic_memories(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: UUID,
         query: str,
         memory_type: Optional[str] = None,
         limit: int = 5
@@ -49,14 +50,14 @@ class MemoryService:
         logger.info(f"Searching semantic memories for user {user_id} with query: {query}")
         return []
     
-    async def get_all_memories(self, db: AsyncSession, user_id: int) -> list[dict]:
+    async def get_all_memories(self, db: AsyncSession, user_id: UUID) -> list[dict]:
         logger.info(f"Fetching all memories for user {user_id}")
         return []
     
     async def delete_memory(
         self, 
         db: AsyncSession, 
-        user_id: int, 
+        user_id: UUID, 
         memory_type: str, 
         memory_id: str
     ):

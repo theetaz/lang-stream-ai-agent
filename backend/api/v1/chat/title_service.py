@@ -12,7 +12,7 @@ class TitleGenerator:
     def __init__(self):
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
     
-    async def generate_title(self, db: AsyncSession, session_id: UUID, user_id: int) -> str:
+    async def generate_title(self, db: AsyncSession, session_id: UUID, user_id: UUID) -> str:
         messages = await message_service.get_messages(db, session_id, limit=5)
         
         if not messages:

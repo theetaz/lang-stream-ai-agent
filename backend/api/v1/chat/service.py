@@ -19,7 +19,7 @@ class ChatService:
         self, 
         user_input: str,
         session_id: Optional[UUID] = None,
-        user_id: Optional[int] = None,
+        user_id: Optional[UUID] = None,
         db: Optional[AsyncSession] = None
     ) -> AsyncIterator[str]:
         """

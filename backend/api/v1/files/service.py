@@ -19,7 +19,7 @@ class FileService:
     async def upload_file(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: UUID,
         file: UploadFile,
         session_id: UUID  # Now required
     ) -> UploadedFile:
@@ -53,7 +53,7 @@ class FileService:
     async def get_user_files(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: UUID,
         session_id: Optional[UUID] = None,
         limit: int = 50,
         offset: int = 0
@@ -74,7 +74,7 @@ class FileService:
         self,
         db: AsyncSession,
         file_id: UUID,
-        user_id: int
+        user_id: UUID
     ) -> UploadedFile:
         query = select(UploadedFile).where(
             UploadedFile.id == file_id,
@@ -107,7 +107,7 @@ class FileService:
         self,
         db: AsyncSession,
         file_id: UUID,
-        user_id: int
+        user_id: UUID
     ):
         file = await self.get_file(db, file_id, user_id)
         

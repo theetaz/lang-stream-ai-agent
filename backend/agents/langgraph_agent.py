@@ -226,7 +226,7 @@ def get_graph(
 async def stream_graph(
     user_input: str,
     session_id: Optional[UUID] = None,
-    user_id: Optional[int] = None,
+    user_id: Optional[UUID] = None,
     use_checkpointing: bool = False,
     previous_messages: Optional[list] = None
 ) -> AsyncIterator[dict]:

@@ -26,9 +26,9 @@ async def _search_documents_impl(query: str, config: Optional[RunnableConfig] = 
             
             if user_id_str:
                 try:
-                    user_id = int(user_id_str)
+                    user_id = UUID(user_id_str)
                 except (ValueError, TypeError):
-                    logger.error(f"Failed to convert user_id_str to int: {user_id_str}")
+                    logger.error(f"Failed to convert user_id_str to UUID: {user_id_str}")
                     pass
             
             if session_id_str:
