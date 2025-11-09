@@ -33,6 +33,9 @@ backend/logs
 # backend uploads
 backend/backend/uploads
 
+# cursor ide
+.cursor
+
 # test results
 backend/.coverage
 
