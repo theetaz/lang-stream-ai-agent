@@ -5,7 +5,7 @@ This module provides a singleton AsyncPostgresStore instance for storing
 user-specific memories across sessions with semantic search capabilities.
 """
 from config.settings import settings
-from langchain.embeddings import init_embeddings
+from langchain_openai import OpenAIEmbeddings
 from langgraph.store.postgres.aio import AsyncPostgresStore
 from psycopg_pool import AsyncConnectionPool
 from common.logger import get_logger
@@ -26,6 +26,13 @@ async def get_async_store():
     global _store, _pool
     
     if _store is None:
+        # Validate API key is set
+        api_key = settings.OPENAI_API_KEY
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY not set. Please add your OpenAI API key to the .env file"
+            )
+        
         # Create connection pool for the store
         _pool = AsyncConnectionPool(
             conninfo=settings.psycopg_database_url,
@@ -36,9 +43,12 @@ async def get_async_store():
         )
         await _pool.open()
         
-        # Initialize embeddings for semantic search
+        # Initialize embeddings for semantic search with explicit API key
         # Using OpenAI embeddings matching our embedding_service configuration
-        embeddings = init_embeddings("openai:text-embedding-3-small")
+        embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-small",
+            api_key=api_key,
+        )
         
         # Create store with semantic search enabled
         _store = AsyncPostgresStore(

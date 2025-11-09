@@ -34,7 +34,12 @@ async def chat_stream(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Streaming chat endpoint using Server-Sent Events (SSE)."""
+    """Streaming chat endpoint using Server-Sent Events (SSE).
+    
+    Args:
+        request: Chat request containing user input
+        session_id: Optional session ID from query parameter (not in body)
+    """
     if session_id:
         await session_service.get_session(db, session_id, current_user.id)
     

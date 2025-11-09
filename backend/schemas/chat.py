@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 class ChatRequest(BaseModel):
     input: str
-    session_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
