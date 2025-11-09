@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,6 +26,11 @@ interface UserMenuProps {
 
 export function UserMenu({ user }: UserMenuProps) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const getUserInitials = () => {
     if (!user.name) return "U";
@@ -40,6 +46,20 @@ export function UserMenu({ user }: UserMenuProps) {
     await signOut();
     router.push("/login");
   };
+
+  // Only render dropdown after client-side hydration to avoid ID mismatch
+  if (!mounted) {
+    return (
+      <Button variant="ghost" className="relative h-9 w-9 rounded-full" disabled>
+        <Avatar className="h-9 w-9">
+          <AvatarImage src={user.image} alt={user.name || "User"} />
+          <AvatarFallback className="bg-gradient-to-br from-blue-600 to-purple-600 text-white">
+            {getUserInitials()}
+          </AvatarFallback>
+        </Avatar>
+      </Button>
+    );
+  }
 
   return (
     <DropdownMenu>

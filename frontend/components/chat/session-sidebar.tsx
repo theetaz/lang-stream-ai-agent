@@ -34,7 +34,8 @@ export function SessionSidebar({
     refetchInterval: 10000, // Refresh every 10 seconds
   })
 
-  const sessions = sessionsData?.data || []
+  // Backend returns { items: [...], pagination: {...} } inside data
+  const sessions = sessionsData?.data?.items || []
 
   const deleteMutation = useMutation({
     mutationFn: (sessionId: string) => deleteSession(sessionId),
