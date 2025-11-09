@@ -1,22 +1,23 @@
+from typing import List, Optional
+from uuid import UUID
+
+from api.v1.chat.message_service import message_service
 from api.v1.chat.service import ChatService
 from api.v1.chat.session_service import session_service
-from api.v1.chat.message_service import message_service
+from auth.utils import get_current_user
+from common.response import APIResponse, success_response
+from database.db_client import get_db
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from models.user import User
 from schemas.chat import ChatRequest, ChatResponse
 from schemas.chat_session import (
+    ChatMessageResponse,
     ChatSessionCreate,
-    ChatSessionUpdate,
     ChatSessionResponse,
-    ChatMessageResponse
+    ChatSessionUpdate,
 )
-from database.db_client import get_db
-from auth.utils import get_current_user
-from models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
-from common.response import APIResponse, success_response
-from uuid import UUID
-from typing import List, Optional
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -32,23 +33,20 @@ async def chat_stream(
     session_id: Optional[UUID] = None,
     service: ChatService = Depends(get_chat_service),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Streaming chat endpoint using Server-Sent Events (SSE).
-    
+
     Args:
         request: Chat request containing user input
         session_id: Optional session ID from query parameter (not in body)
     """
     if session_id:
         await session_service.get_session(db, session_id, current_user.id)
-    
+
     return StreamingResponse(
         service.event_stream(
-            request.input,
-            session_id=session_id,
-            user_id=current_user.id,
-            db=db
+            request.input, session_id=session_id, user_id=current_user.id, db=db
         ),
         media_type="text/event-stream",
         headers={
@@ -80,12 +78,12 @@ async def run_agent(
 async def create_session(
     data: ChatSessionCreate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     session = await session_service.create_session(db, current_user.id, data.title)
     return success_response(
         ChatSessionResponse.model_validate(session),
-        message="Session created successfully"
+        message="Session created successfully",
     )
 
 
@@ -95,12 +93,14 @@ async def get_sessions(
     limit: int = 50,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    sessions, total = await session_service.get_sessions(db, current_user.id, archived, limit, offset)
+    sessions, total = await session_service.get_sessions(
+        db, current_user.id, archived, limit, offset
+    )
     total_pages = (total + limit - 1) // limit if limit > 0 else 0
     current_page = (offset // limit) + 1 if limit > 0 else 1
-    
+
     return success_response(
         {
             "items": [ChatSessionResponse.model_validate(s) for s in sessions],
@@ -109,10 +109,10 @@ async def get_sessions(
                 "page": current_page,
                 "per_page": limit,
                 "total_pages": total_pages,
-                "offset": offset
-            }
+                "offset": offset,
+            },
         },
-        message="Sessions fetched successfully"
+        message="Sessions fetched successfully",
     )
 
 
@@ -120,12 +120,12 @@ async def get_sessions(
 async def get_session(
     session_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     session = await session_service.get_session(db, session_id, current_user.id)
     return success_response(
         ChatSessionResponse.model_validate(session),
-        message="Session fetched successfully"
+        message="Session fetched successfully",
     )
 
 
@@ -134,18 +134,20 @@ async def update_session(
     session_id: UUID,
     data: ChatSessionUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     session = await session_service.update_session(
-        db, session_id, current_user.id,
+        db,
+        session_id,
+        current_user.id,
         title=data.title,
         is_archived=data.is_archived,
-        is_pinned=data.is_pinned
+        is_pinned=data.is_pinned,
     )
-    
+
     return success_response(
         ChatSessionResponse.model_validate(session),
-        message="Session updated successfully"
+        message="Session updated successfully",
     )
 
 
@@ -153,26 +155,28 @@ async def update_session(
 async def delete_session(
     session_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     await session_service.delete_session(db, session_id, current_user.id)
     return success_response(
-        {"session_id": str(session_id)},
-        message="Session deleted successfully"
+        {"session_id": str(session_id)}, message="Session deleted successfully"
     )
 
 
-@router.get("/sessions/{session_id}/messages", response_model=APIResponse[List[ChatMessageResponse]])
+@router.get(
+    "/sessions/{session_id}/messages",
+    response_model=APIResponse[List[ChatMessageResponse]],
+)
 async def get_messages(
     session_id: UUID,
     limit: int = 50,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     await session_service.get_session(db, session_id, current_user.id)
     messages = await message_service.get_messages(db, session_id, limit, offset)
     return success_response(
         [ChatMessageResponse.model_validate(m) for m in messages],
-        message="Messages fetched successfully"
+        message="Messages fetched successfully",
     )
