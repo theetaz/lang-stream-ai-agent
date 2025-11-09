@@ -2,13 +2,14 @@ from typing import AsyncIterator, Literal, Optional
 from uuid import UUID
 
 from config.settings import settings
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
+from langgraph.graph.message import add_messages
 
 
 def get_llm():
@@ -183,6 +184,31 @@ async def call_model(
     return {"messages": [response]}
 
 
+async def tools_node_with_config(state: MessagesState, config: RunnableConfig):
+    """
+    Custom tool node that passes config to tools.
+    This ensures user_id and other config values are available to tools.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Log config for debugging
+    if config:
+        logger.info(f"tools_node_with_config received config: {config}")
+        if isinstance(config, dict):
+            configurable = config.get("configurable", {})
+            user_id = configurable.get("user_id") if isinstance(configurable, dict) else None
+            logger.info(f"Extracted user_id from config in tools_node: {user_id}")
+    
+    tools = get_tools(include_memory=True)
+    tool_node = ToolNode(tools)
+    
+    # Bind config to tools by creating a runnable with config
+    # The ToolNode will use the config from the graph context
+    result = await tool_node.ainvoke(state, config)
+    return result
+
+
 def get_graph(
     checkpointer: Optional[BaseCheckpointSaver] = None,
     store: Optional[BaseStore] = None
@@ -198,14 +224,11 @@ def get_graph(
         checkpointer: Optional checkpointer for short-term memory (session state)
         store: Optional store for long-term memory (cross-session memories)
     """
-    tools = get_tools(include_memory=True)
-    tool_node = ToolNode(tools)
-
     graph = StateGraph(MessagesState)
 
     # Add nodes
     graph.add_node("call_model", call_model)
-    graph.add_node("tools", tool_node)
+    graph.add_node("tools", tools_node_with_config)
 
     # Set entry point
     graph.add_edge(START, "call_model")

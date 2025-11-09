@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables.config import get_config
 from langgraph.store.base import BaseStore
 from typing import Literal, Optional
 from uuid import uuid4
@@ -9,16 +10,50 @@ logger = get_logger(__name__)
 
 
 def _get_user_id_from_config(config: Optional[RunnableConfig] = None) -> Optional[str]:
-    """Extract user_id from config if available."""
+    """Extract user_id from config if available.
+    
+    Tries multiple methods to get config:
+    1. From passed config parameter
+    2. From LangChain's run context (get_config())
+    """
+    # First try the passed config
     if config:
         if isinstance(config, dict):
             configurable = config.get("configurable", {})
             if isinstance(configurable, dict):
-                return configurable.get("user_id")
+                user_id = configurable.get("user_id")
+                if user_id:
+                    return str(user_id)
         elif hasattr(config, "get"):
             configurable = config.get("configurable", {})
             if isinstance(configurable, dict):
-                return configurable.get("user_id")
+                user_id = configurable.get("user_id")
+                if user_id:
+                    return str(user_id)
+    
+    # If not found, try to get from LangChain's run context
+    try:
+        run_config = get_config(silent=True)
+        if run_config:
+            logger.info(f"Got config from run context: {run_config}")
+            if isinstance(run_config, dict):
+                configurable = run_config.get("configurable", {})
+                if isinstance(configurable, dict):
+                    user_id = configurable.get("user_id")
+                    if user_id:
+                        logger.info(f"Found user_id from run context: {user_id}")
+                        return str(user_id)
+            elif hasattr(run_config, "get"):
+                configurable = run_config.get("configurable", {})
+                if isinstance(configurable, dict):
+                    user_id = configurable.get("user_id")
+                    if user_id:
+                        logger.info(f"Found user_id from run context (hasattr): {user_id}")
+                        return str(user_id)
+    except Exception as e:
+        logger.debug(f"Could not get config from run context: {e}")
+    
+    logger.warning("Could not extract user_id from config")
     return None
 
 
