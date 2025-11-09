@@ -166,6 +166,27 @@ async def call_model(
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Failed to retrieve memories: {e}")
     
+    # Check if session has uploaded files (for document search encouragement)
+    has_files = False
+    if config and config.get("configurable"):
+        thread_id = config["configurable"].get("thread_id")
+        if thread_id:
+            try:
+                from database.db_client import AsyncSessionLocal
+                from sqlalchemy import select, func
+                from models.uploaded_file import UploadedFile, ProcessingStatus
+                
+                async with AsyncSessionLocal() as check_db:
+                    file_count_query = select(func.count(UploadedFile.id)).where(
+                        UploadedFile.session_id == UUID(thread_id),
+                        UploadedFile.processing_status == ProcessingStatus.COMPLETED
+                    )
+                    result = await check_db.execute(file_count_query)
+                    file_count = result.scalar() or 0
+                    has_files = file_count > 0
+            except Exception:
+                pass  # Ignore errors, just don't set has_files
+    
     # Build system message with memory context
     system_content = (
         "You are a helpful AI assistant with access to tools. "
@@ -173,6 +194,14 @@ async def call_model(
         "When users ask questions requiring current information, use tavily_search. "
         "Always provide detailed, helpful responses based on the information you find."
     )
+    
+    # Add file context if files exist in session
+    if has_files:
+        system_content += (
+            "\n\nIMPORTANT: This conversation has uploaded files. "
+            "When the user asks questions, ALWAYS use the search_user_documents tool first to search their uploaded files before responding. "
+            "This includes questions like 'what is this file', 'tell me about the document', or any questions that might relate to uploaded content."
+        )
     
     if memory_context:
         system_content += memory_context

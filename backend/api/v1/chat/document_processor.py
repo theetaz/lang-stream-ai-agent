@@ -46,28 +46,42 @@ class DocumentProcessor:
                 await db.commit()
                 logger.info(f"File {file_id} status updated to PROCESSING")
                 
-                # Extract text from document
+                # Extract text from document using Docling
                 # Run Docling conversion in thread pool to avoid blocking event loop
                 def convert_with_docling(file_path: str) -> str:
                     """Synchronous Docling conversion function to run in thread pool."""
-                    from docling.document_converter import DocumentConverter
+                    from docling.document_converter import DocumentConverter, PdfFormatOption
                     from docling.datamodel.base_models import InputFormat
                     from docling.datamodel.pipeline_options import PdfPipelineOptions
                     
-                    # Configure pipeline options for faster processing
+                    # Configure pipeline options for optimal text extraction
+                    # Docling handles all document types automatically
                     pipeline_options = PdfPipelineOptions()
-                    pipeline_options.do_ocr = False  # Disable OCR for faster processing (only if text is already extractable)
-                    pipeline_options.do_table_structure = False  # Disable table structure detection for speed
-                    pipeline_options.do_table_cell_matching = False
+                    # Enable OCR only if needed (for scanned PDFs)
+                    # Docling will automatically detect if OCR is needed
+                    pipeline_options.do_ocr = True  # Enable OCR for better text extraction
+                    # Enable table structure for better content extraction
+                    pipeline_options.do_table_structure = True
+                    # Enable code and formula enrichment for better content
+                    pipeline_options.do_code_enrichment = True
+                    pipeline_options.do_formula_enrichment = True
                     
-                    # Create converter with optimized options
+                    # Create converter with proper format options
                     converter = DocumentConverter(
                         format_options={
-                            InputFormat.PDF: pipeline_options
+                            InputFormat.PDF: PdfFormatOption(
+                                pipeline_options=pipeline_options
+                            )
                         }
                     )
+                    
+                    # Convert document - Docling handles all formats automatically
                     conv_result = converter.convert(file_path)
-                    return conv_result.document.export_to_markdown()
+                    
+                    # Export to markdown - this gives clean, structured text
+                    markdown_content = conv_result.document.export_to_markdown()
+                    
+                    return markdown_content
                 
                 def read_as_text(file_path: str) -> str:
                     """Fallback: read file as text."""

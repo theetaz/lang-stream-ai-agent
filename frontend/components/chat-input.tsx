@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Send, X, FileText } from "lucide-react"
+import { Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { FileUploadButton } from "@/components/file-upload-button"
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 
 interface ChatInputProps {
   onSend: (message: string, files?: File[]) => void
+  onFileUpload?: (file: File) => void
   disabled?: boolean
   isUploading?: boolean
   placeholder?: string
@@ -16,20 +17,19 @@ interface ChatInputProps {
 
 export function ChatInput({
   onSend,
+  onFileUpload,
   disabled = false,
   isUploading = false,
   placeholder = "Ask anything...",
 }: ChatInputProps) {
   const [input, setInput] = React.useState("")
-  const [selectedFiles, setSelectedFiles] = React.useState<File[]>([])
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if ((input.trim() || selectedFiles.length > 0) && !disabled) {
-      onSend(input.trim(), selectedFiles)
+    if (input.trim() && !disabled) {
+      onSend(input.trim())
       setInput("")
-      setSelectedFiles([])
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto"
       }
@@ -44,17 +44,14 @@ export function ChatInput({
   }
 
   const handleFileSelect = (file: File) => {
-    setSelectedFiles((prev) => [...prev, file])
-  }
-
-  const removeFile = (index: number) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    // If onFileUpload callback is provided, upload immediately
+    if (onFileUpload) {
+      onFileUpload(file)
+    } else {
+      // Fallback: pass files with message (old behavior)
+      // This shouldn't happen with the new flow
+      console.warn("onFileUpload not provided, files will be sent with message")
+    }
   }
 
   React.useEffect(() => {
@@ -70,34 +67,6 @@ export function ChatInput({
       onSubmit={handleSubmit}
       className="relative flex flex-col gap-2"
     >
-      {selectedFiles.length > 0 && (
-        <div className="flex flex-wrap gap-2 rounded-lg border border-input bg-background p-2">
-          {selectedFiles.map((file, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm"
-            >
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              <div className="flex flex-col min-w-0">
-                <span className="truncate font-medium">{file.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatFileSize(file.size)}
-                </span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 flex-shrink-0"
-                onClick={() => removeFile(index)}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="flex items-end gap-2 rounded-lg border border-input bg-background p-2">
         <FileUploadButton
           onFileSelect={handleFileSelect}
@@ -110,7 +79,7 @@ export function ChatInput({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          disabled={disabled}
+          disabled={disabled || isUploading}
           className={cn(
             "min-h-[24px] max-h-[200px] resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
             "scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
@@ -120,7 +89,7 @@ export function ChatInput({
         <Button
           type="submit"
           size="icon"
-          disabled={(!input.trim() && selectedFiles.length === 0) || disabled}
+          disabled={!input.trim() || disabled || isUploading}
           className="h-9 w-9 flex-shrink-0"
         >
           <Send className="h-4 w-4" />

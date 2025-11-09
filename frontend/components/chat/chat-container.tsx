@@ -190,6 +190,55 @@ export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
     }
   }, [messages, streamingMessage, streamingToolCalls]);
 
+  const handleFileUpload = async (file: File) => {
+    // Create session if needed
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      const response = await createSessionMutation.mutateAsync();
+      if (!response.data) {
+        toast({
+          title: "Error",
+          description: "Failed to create chat session",
+          variant: "destructive",
+        });
+        return;
+      }
+      sessionId = response.data.id;
+      setCurrentSessionId(sessionId);
+      setIsNewSession(true);
+    }
+
+    // Upload and process file (backend processes synchronously)
+    try {
+      const result = await uploadMutation.mutateAsync({
+        file,
+        sessionId: sessionId || undefined,
+      });
+      
+      if (result.data) {
+        // File is already processed when upload completes (synchronous processing)
+        if (result.data.processing_status === "completed") {
+          toast({
+            title: "File uploaded",
+            description: `${file.name} has been processed and is ready`,
+          });
+        } else if (result.data.processing_status === "failed") {
+          toast({
+            title: "Processing failed",
+            description: `Failed to process ${file.name}`,
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: `Failed to upload ${file.name}`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSendMessage = async (content: string, files?: File[]) => {
     // Create session if this is the first message
     let sessionId = currentSessionId;
@@ -208,35 +257,20 @@ export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
       setIsNewSession(true);
     }
 
-    // Upload files first if any
-    const uploadedFiles: UploadedFile[] = [];
+    // If files are provided, upload them first (separate from message)
     if (files && files.length > 0) {
-      try {
-        for (const file of files) {
-          const result = await uploadMutation.mutateAsync({
-            file,
-            sessionId: sessionId || undefined,
-          });
-          if (result.data) {
-            uploadedFiles.push(result.data);
-          }
-        }
-      } catch (error) {
-        toast({
-          title: "Upload failed",
-          description: "Failed to upload files",
-          variant: "destructive",
-        });
-        return;
-      }
+      toast({
+        title: "Uploading files",
+        description: "Please upload files using the upload button first, then send your message",
+      });
+      return; // Don't send message if files are attached - user should upload separately
     }
 
-    // Create user message with attachments
+    // Create user message
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content,
-      attachments: uploadedFiles.length > 0 ? uploadedFiles : undefined,
       timestamp: new Date(),
     };
 
@@ -327,19 +361,20 @@ export function ChatContainer({ user, initialSessionId }: ChatContainerProps) {
             </ScrollArea>
           )}
 
-          <div className="border-t bg-background">
-            <div className="mx-auto max-w-3xl p-4">
-              <ChatInput
-                onSend={handleSendMessage}
-                disabled={isStreaming}
-                isUploading={uploadMutation.isPending}
-                placeholder="Ask anything..."
-              />
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                LangGraph AI can make mistakes. Check important info.
-              </p>
-            </div>
-          </div>
+              <div className="border-t bg-background">
+                <div className="mx-auto max-w-3xl p-4">
+                  <ChatInput
+                    onSend={handleSendMessage}
+                    onFileUpload={handleFileUpload}
+                    disabled={isStreaming}
+                    isUploading={uploadMutation.isPending}
+                    placeholder="Ask anything..."
+                  />
+                  <p className="mt-2 text-center text-xs text-muted-foreground">
+                    LangGraph AI can make mistakes. Check important info.
+                  </p>
+                </div>
+              </div>
         </div>
       </div>
     </div>

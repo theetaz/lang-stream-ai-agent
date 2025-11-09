@@ -27,11 +27,15 @@ async def upload_file(
 
     from api.v1.chat.document_processor import document_processor
 
-    asyncio.create_task(document_processor.process_file(uploaded_file.id))
+    # Process file synchronously - wait for completion before returning
+    await document_processor.process_file(uploaded_file.id)
+    
+    # Refresh file status from database
+    await db.refresh(uploaded_file)
 
     return success_response(
         UploadedFileResponse.model_validate(uploaded_file),
-        message="File uploaded successfully",
+        message="File uploaded and processed successfully",
     )
 
 
